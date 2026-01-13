@@ -42,22 +42,22 @@ fn iterative_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {
 	//create directory to store new backup
 	let new_backup = format!(
 		"{}/{}",
-		backups,
+		backup_dir,
 		OffsetDateTime::now_utc()
 			.format(FORMAT)
 			.expect("current time to timestamp conversion failed")
 	);
-	fs::create_dir_all(new_backup);
+	fs::create_dir_all(&new_backup);
 
 	//for each dimension,
 	for dim in dims {
 		let this_dim_backup = format!("{}/{}", new_backup, dim);
 
 		//create new directory in backup folder to store this dimension
-		fs::create_dir(this_dim_backup);
+		fs::create_dir(&this_dim_backup);
 
 		//get the names for the region files for this dimension
-		let mut region_files = fs::read_dir(format!("{}/{}", world_path, this_dim_backup))
+		let mut region_files = fs::read_dir(format!("{}/{}", world_path, dim))
 			.expect("world files unreadable");
 
 		//collect read dir into Vec of file names
@@ -68,9 +68,13 @@ fn iterative_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {
 		//sort files by name
 		region_files.sort();
 
-		//check timestamps for changes
-
 		//generate manifest
+		for region_file in region_files {
+			//check modified timestamp for changes
+			//if modified after last backup, needs to be updated
+			//if untouched, reference last backup for file location
+		}
+
 		//copy changed files
 	}
 }
