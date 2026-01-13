@@ -1,10 +1,10 @@
 use std::ffi::OsString;
 use std::fmt::format;
 use std::fs::{self, Metadata};
-use time::OffsetDateTime;
-use time::macros::format_description;
 use std::io::BufWriter;
 use std::io::Write;
+use time::OffsetDateTime;
+use time::macros::format_description;
 
 const FORMAT: &[time::format_description::FormatItem<'static>] =
 	format_description!("[year]-[month]-[day]T[hour]-[minute]");
@@ -77,7 +77,8 @@ fn iterative_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {
 		region_files.sort();
 
 		//csv to store paths to old region copies
-		let output_csv = fs::File::create(format!("{}/{}.csv", this_dim_backup, "manifest")).expect("failed to create manifest.csv");
+		let output_csv = fs::File::create(format!("{}/{}.csv", this_dim_backup, "manifest"))
+			.expect("failed to create manifest.csv");
 		let mut csv_writer = BufWriter::new(output_csv);
 
 		//generate csv containing the paths of any regions that have not changed so that they can be retrieved from previous backups and copy and regions that have changed
@@ -92,7 +93,19 @@ fn iterative_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {
 
 			//compare time of modification to time of last backup
 			match modified_timestamp >= most_recent_backup {
-				true => {fs::copy(&region_file, format!("{}/{}", this_dim_backup, &region_file.to_str().expect("failed to convert os path to &str"))).expect("copying region file failed");}, //has been modified since last backup, needs to be updated
+				true => {
+					fs::copy(
+						&region_file,
+						format!(
+							"{}/{}",
+							this_dim_backup,
+							&region_file
+								.to_str()
+								.expect("failed to convert os path to &str")
+						),
+					)
+					.expect("copying region file failed");
+				} //has been modified since last backup, needs to be updated
 				false => { //hasn't been modified since last backup, insert path to older backup of the region
 					//check previous backup directory for the region
 					//check previous backup manifest for the region
