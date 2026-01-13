@@ -1,8 +1,10 @@
-use std::collections::btree_set::Difference;
 use std::ffi::OsString;
+use std::fmt::format;
 use std::fs::{self, Metadata};
 use time::OffsetDateTime;
 use time::macros::format_description;
+use std::io::BufWriter;
+use std::io::Write;
 
 const FORMAT: &[time::format_description::FormatItem<'static>] =
 	format_description!("[year]-[month]-[day]T[hour]-[minute]");
@@ -37,7 +39,16 @@ fn iterative_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {
 	//find most recent backup by sorting, reversing, and getting the first element
 	backups.sort();
 	backups.reverse();
-	let most_recent_backup = backups.get(0).expect("backup dir empty").clone();
+	let most_recent_backup = OffsetDateTime::parse(
+		backups
+			.get(0)
+			.expect("backup dir empty")
+			.clone()
+			.to_str()
+			.expect("most recent backup path conversion to string failed"),
+		&FORMAT,
+	)
+	.expect("failed to parse directory to timestamp");
 
 	//create directory to store new backup
 	let new_backup = format!(
@@ -47,34 +58,46 @@ fn iterative_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {
 			.format(FORMAT)
 			.expect("current time to timestamp conversion failed")
 	);
-	fs::create_dir_all(&new_backup);
+	fs::create_dir_all(&new_backup).expect("failed to create backup folder");
 
 	//for each dimension,
 	for dim in dims {
 		let this_dim_backup = format!("{}/{}", new_backup, dim);
 
 		//create new directory in backup folder to store this dimension
-		fs::create_dir(&this_dim_backup);
+		fs::create_dir(&this_dim_backup).expect("failed to create dimension backup folder");
 
-		//get the names for the region files for this dimension
+		//get the names of the region files for this dimension
 		let mut region_files = fs::read_dir(format!("{}/{}", world_path, dim))
-			.expect("world files unreadable");
-
-		//collect read dir into Vec of file names
-		let mut region_files = region_files
+			.expect("world files unreadable")
 			.map(|region| region.expect("region file could not be read").file_name())
 			.collect::<Vec<OsString>>();
 
 		//sort files by name
 		region_files.sort();
 
-		//generate manifest
+		//csv to store paths to old region copies
+		let output_csv = fs::File::create(format!("{}/{}.csv", this_dim_backup, "manifest")).expect("failed to create manifest.csv");
+		let mut csv_writer = BufWriter::new(output_csv);
+
+		//generate csv containing the paths of any regions that have not changed so that they can be retrieved from previous backups and copy and regions that have changed
 		for region_file in region_files {
 			//check modified timestamp for changes
-			//if modified after last backup, needs to be updated
-			//if untouched, reference last backup for file location
-		}
+			let modified_timestamp = OffsetDateTime::from(
+				fs::metadata(&region_file)
+					.expect("failed to read metadata")
+					.modified()
+					.expect("failed to read timestamp"),
+			);
 
-		//copy changed files
+			//compare time of modification to time of last backup
+			match modified_timestamp >= most_recent_backup {
+				true => {fs::copy(&region_file, format!("{}/{}", this_dim_backup, &region_file.to_str().expect("failed to convert os path to &str"))).expect("copying region file failed");}, //has been modified since last backup, needs to be updated
+				false => { //hasn't been modified since last backup, insert path to older backup of the region
+					//check previous backup directory for the region
+					//check previous backup manifest for the region
+				}
+			}
+		}
 	}
 }
