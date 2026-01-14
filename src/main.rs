@@ -41,7 +41,6 @@ fn iterative_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {
 			.expect("backup dir empty");
 
 	//get the timestamp of the backup
-	println!("{:?}", most_recent_backup.as_str());
 	let most_recent_backup_timestamp = PrimitiveDateTime::parse(most_recent_backup.as_str(), &FORMAT)
 		.expect("failed to parse directory to timestamp");
 
