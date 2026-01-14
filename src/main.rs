@@ -44,15 +44,7 @@ fn iterative_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {
 	let most_recent_backup_timestamp = PrimitiveDateTime::parse(most_recent_backup.as_str(), &FORMAT).expect("could not poarse time string").assume_offset(UtcOffset::current_local_offset().expect("could not get current timezone"));
 
 	//create directory to store new backup
-	let new_backup = format!(
-		"{}/{}",
-		backup_dir,
-		OffsetDateTime::now_local()
-			.expect("could not get local time")
-			.format(&FORMAT)
-			.expect("could not convert time to String")
-	);
-	fs::create_dir_all(&new_backup).expect("failed to create backup directory");
+	new_backup_dir(backup_dir);
 
 	//for each dimension,
 	for dim in dims {
@@ -109,4 +101,17 @@ fn iterative_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {
 			}
 		}
 	}
+}
+
+fn new_backup_dir(backup_dir: &str) -> () {
+	//create directory to store new backup
+	let new_backup = format!(
+		"{}/{}",
+		backup_dir,
+		OffsetDateTime::now_local()
+			.expect("could not get local time")
+			.format(&FORMAT)
+			.expect("could not convert time to String")
+	);
+	fs::create_dir_all(&new_backup).expect("failed to create backup directory");
 }
