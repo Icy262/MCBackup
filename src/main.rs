@@ -19,11 +19,7 @@ fn main() {
 	//let backup_frequency; //add flag to force backup
 
 	//check if previous backup exists
-	match fs::read_dir(path_to_backup_dir)
-		.expect("backup dir could not be read")
-		.next()
-		.is_none()
-	{
+	match prev_backup_exists(path_to_backup_dir) {
 		true => full_backup(world_path, path_to_backup_dir, dims), //if no previous backups, perform full backup
 		false => iterative_backup(world_path, path_to_backup_dir, dims), // if there are previous backups, perform iterative backup
 	}
@@ -217,4 +213,11 @@ fn new_backup_dir(path_to_backup_dir: &str, dims: &Vec<&str>) -> () {
 		fs::create_dir_all(format!("{}/{}", new_backup, dim))
 			.expect("failed to create dimension backup directory");
 	}
+}
+
+fn prev_backup_exists(path_to_backup_dir: &str) -> bool {
+	fs::read_dir(path_to_backup_dir)
+		.expect("backup dir could not be read")
+		.next()
+		.is_none()
 }
