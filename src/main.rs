@@ -35,12 +35,7 @@ fn full_backup(world_path: &Path, path_to_backup_dir: &Path, dims: Vec<&Path>) -
 
 	for dim in dims {
 		let path_to_dim_backup = Path::new(path_to_backup_dir)
-			.join(
-				OffsetDateTime::now_local()
-					.expect("could not get local time")
-					.format(&FORMAT)
-					.expect("could not convert time to String"),
-			)
+			.join(current_time_as_string())
 			.join(dim);
 
 		//create empty csv so we don't have issues doing iterative backups later
@@ -104,12 +99,7 @@ fn iterative_backup(world_path: &Path, path_to_backup_dir: &Path, dims: Vec<&Pat
 	//for each dimension,
 	for dim in dims {
 		let path_to_dim_backup = path_to_backup_dir
-			.join(
-				OffsetDateTime::now_local()
-					.expect("could not get local time")
-					.format(&FORMAT)
-					.expect("could not convert time to String"),
-			)
+			.join(current_time_as_string())
 			.join(dim);
 
 		//get the names of the region files for this dimension
@@ -211,12 +201,7 @@ fn iterative_backup(world_path: &Path, path_to_backup_dir: &Path, dims: Vec<&Pat
 
 fn new_backup_dir(path_to_backup_dir: &Path, dims: &Vec<&Path>) -> () {
 	//create directory to store new backup
-	let new_backup = path_to_backup_dir.join(
-		OffsetDateTime::now_local()
-			.expect("could not get local time")
-			.format(&FORMAT)
-			.expect("could not convert time to String"),
-	);
+	let new_backup = path_to_backup_dir.join(current_time_as_string());
 	fs::create_dir_all(&new_backup).expect("failed to create backup directory");
 
 	for dim in dims.iter() {
@@ -231,4 +216,11 @@ fn prev_backup_exists(path_to_backup_dir: &Path) -> bool {
 		.expect("backup dir could not be read")
 		.next()
 		.is_none()
+}
+
+fn current_time_as_string() -> String {
+	OffsetDateTime::now_local()
+		.expect("could not get local time")
+		.format(&FORMAT)
+		.expect("could not convert time to String")
 }
