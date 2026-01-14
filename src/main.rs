@@ -1,12 +1,12 @@
 use std::ffi::OsString;
 use std::fs::{self, DirEntry, Metadata};
-use std::io::BufWriter;
+use std::io::ErrorKind;
+use std::io::{BufWriter, Write};
+use std::path::Path;
+use std::path::PathBuf;
 use time::OffsetDateTime;
 use time::macros::format_description;
 use time::{PrimitiveDateTime, UtcOffset};
-use std::path::Path;
-use std::path::PathBuf;
-use std::io::ErrorKind;
 
 const FORMAT: &[time::format_description::FormatItem<'static>] =
 	format_description!("[year]-[month]-[day]T[hour]-[minute]");
@@ -146,7 +146,7 @@ fn iterative_backup(world_path: &str, path_to_backup_dir: &str, dims: Vec<&str>)
 			match modified_timestamp >= most_recent_backup_timestamp {
 				true => {
 					fs::copy(
-						&region_file,
+						format!("{}/{}/{}", world_path, dim, region_file),
 						format!("{}/{}", path_to_dim_backup, &region_file),
 					)
 					.expect("copying region file failed");
@@ -154,22 +154,46 @@ fn iterative_backup(world_path: &str, path_to_backup_dir: &str, dims: Vec<&str>)
 				false => {
 					//hasn't been modified since last backup, insert path to older backup of the region
 					//check previous backup directory for the region
-					if fs::read_dir(format!("{}/{}/{}", path_to_backup_dir, most_recent_backup, dim))
-						.expect("could not read most recent backup")
-						.map(|directory| {
-							directory
-								.expect("backup inacessible")
-								.file_name()
-								.into_string()
-								.expect("could not convert os string to String")
-						})
-						.find(|region_name| *region_name == region_file)
-						.is_some()
+					if fs::read_dir(format!(
+						"{}/{}/{}",
+						path_to_backup_dir, most_recent_backup, dim
+					))
+					.expect("could not read most recent backup")
+					.map(|directory| {
+						directory
+							.expect("backup inacessible")
+							.file_name()
+							.into_string()
+							.expect("could not convert os string to String")
+					})
+					.any(|region_name| *region_name == region_file)
+					{ //previous backup has the region
+						//found in previous backup's files, so put a reference to it
+						csv_writer
+							.write_all(
+								format!("{}/{}/{},", most_recent_backup, dim, region_file)
+									.as_bytes(),
+							)
+							.expect("failed to write to csv");
+					} else if let Some(path) = fs::read_to_string(format!( //check if the previous backup's manifest has the region
+						"{}/{}/{}/manifest.csv",
+						path_to_backup_dir, most_recent_backup, dim
+					))
+					.expect("manifest read failed")
+					.split(",")
+					.find(|item| item.contains(region_file.as_str()))
 					{
-
+						//check previous backup manifest for the region
+						csv_writer
+							.write_all(format!("{},", path).as_bytes())
+							.expect("could not write to manifest");
+					} else { //something screwy is going on. copy the file and move on
+						fs::copy(
+							format!("{}/{}/{}", world_path, dim, region_file),
+							format!("{}/{}", path_to_dim_backup, &region_file),
+						)
+						.expect("copying region file failed");
 					}
-
-					//check previous backup manifest for the region
 				}
 			}
 		}
@@ -190,10 +214,7 @@ fn new_backup_dir(path_to_backup_dir: &str, dims: &Vec<&str>) -> () {
 
 	for dim in dims.iter() {
 		//create new directory in backup directory to store this dimension
-		fs::create_dir_all(format!(
-			"{}/{}",
-			new_backup,
-			dim
-		)).expect("failed to create dimension backup directory");
+		fs::create_dir_all(format!("{}/{}", new_backup, dim))
+			.expect("failed to create dimension backup directory");
 	}
 }
