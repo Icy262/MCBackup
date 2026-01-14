@@ -1,6 +1,6 @@
 use std::fs::{self, DirEntry, Metadata};
 use std::io::BufWriter;
-use time::PrimitiveDateTime;
+use time::{PrimitiveDateTime, UtcOffset};
 use time::OffsetDateTime;
 use time::macros::format_description;
 
@@ -41,8 +41,7 @@ fn iterative_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {
 			.expect("backup dir empty");
 
 	//get the timestamp of the backup
-	let most_recent_backup_timestamp = PrimitiveDateTime::parse(most_recent_backup.as_str(), &FORMAT)
-		.expect("failed to parse directory to timestamp");
+	let most_recent_backup_timestamp = PrimitiveDateTime::parse(most_recent_backup.as_str(), &FORMAT).expect("could not poarse time string").assume_offset(UtcOffset::current_local_offset().expect("could not get current timezone"));
 
 	//create directory to store new backup
 	let new_backup = format!(
@@ -87,27 +86,27 @@ fn iterative_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {
 			);
 
 			//compare time of modification to time of last backup
-			// match modified_timestamp >= most_recent_backup_timestamp {
-			// 	true => {
-			// 		fs::copy(
-			// 			&region_file,
-			// 			format!(
-			// 				"{}/{}",
-			// 				this_dim_backup,
-			// 				&region_file
-			// 			),
-			// 		)
-			// 		.expect("copying region file failed");
-			// 	} //has been modified since last backup, needs to be updated
-			// 	false => { //hasn't been modified since last backup, insert path to older backup of the region
-			// 		//check previous backup directory for the region
-			// 		if fs::read_dir(format!("{}/{}", most_recent_backup, dim)).expect("could not read most recent backup").map(|directory| directory.expect("backup inacessible").file_name().into_string().expect("could not convert os string to String")).find(|region_name| *region_name == region_file).is_some() {
+			match modified_timestamp >= most_recent_backup_timestamp {
+				true => {
+					fs::copy(
+						&region_file,
+						format!(
+							"{}/{}",
+							this_dim_backup,
+							&region_file
+						),
+					)
+					.expect("copying region file failed");
+				} //has been modified since last backup, needs to be updated
+				false => { //hasn't been modified since last backup, insert path to older backup of the region
+					//check previous backup directory for the region
+					if fs::read_dir(format!("{}/{}", most_recent_backup, dim)).expect("could not read most recent backup").map(|directory| directory.expect("backup inacessible").file_name().into_string().expect("could not convert os string to String")).find(|region_name| *region_name == region_file).is_some() {
 
-			// 		}
+					}
 
-			// 		//check previous backup manifest for the region
-			// 	}
-			// }
+					//check previous backup manifest for the region
+				}
+			}
 		}
 	}
 }
