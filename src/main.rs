@@ -21,21 +21,24 @@ fn main() {
 	]; //vanilla minecraft uses these three directories. add support for additional directories for modded worlds
 	//let backup_frequency; //add flag to force backup
 
+	//set directory timestamp
+	let current_time = current_time_as_string();
+
 	//check if previous backup exists
 	match prev_backup_exists(path_to_backup_dir) {
-		true => full_backup(path_to_world, path_to_backup_dir, dims), //if no previous backups, perform full backup
-		false => iterative_backup(path_to_world, path_to_backup_dir, dims), // if there are previous backups, perform iterative backup
+		true => full_backup(path_to_world, path_to_backup_dir, dims, current_time), //if no previous backups, perform full backup
+		false => iterative_backup(path_to_world, path_to_backup_dir, dims, current_time), // if there are previous backups, perform iterative backup
 	}
 }
 
-fn full_backup(path_to_world: &Path, path_to_backup_dir: &Path, dims: Vec<&Path>) -> () {
+fn full_backup(path_to_world: &Path, path_to_backup_dir: &Path, dims: Vec<&Path>, current_time: String) -> () {
 	//create directory to store new backup
-	init_backup_dir(path_to_backup_dir, &dims);
+	init_backup_dir(path_to_backup_dir, &dims, &current_time);
 
 	//for each dimension to backup,
 	for dim in dims {
 		//generate the path to the backup dir for this dim's regions
-		let path_to_dim_backup = path_to_backup_dir.join(current_time_as_string()).join(dim);
+		let path_to_dim_backup = path_to_backup_dir.join(&current_time).join(dim);
 
 		//generate the path to this dim's regions
 		let path_to_regions = path_to_world.join(dim);
@@ -59,7 +62,7 @@ fn full_backup(path_to_world: &Path, path_to_backup_dir: &Path, dims: Vec<&Path>
 	}
 }
 
-fn iterative_backup(path_to_world: &Path, path_to_backup_dir: &Path, dims: Vec<&Path>) -> () {
+fn iterative_backup(path_to_world: &Path, path_to_backup_dir: &Path, dims: Vec<&Path>, current_time: String) -> () {
 	//get the paths to the backups in the backup directory
 	let mut path_to_backups = fs::read_dir(path_to_backup_dir)
 		.expect("backup dir inaccessible")
@@ -84,12 +87,12 @@ fn iterative_backup(path_to_world: &Path, path_to_backup_dir: &Path, dims: Vec<&
 	.assume_offset(UtcOffset::current_local_offset().expect("could not get current timezone"));
 
 	//create directory to store new backup. MUST go after finding the most recent backup because if not the most recent check will fail
-	init_backup_dir(path_to_backup_dir, &dims);
+	init_backup_dir(path_to_backup_dir, &dims, &current_time);
 
 	//for each dimension,
 	for dim in dims {
 		//generate the path to this dim's backup
-		let path_to_dim_backup = path_to_backup_dir.join(current_time_as_string()).join(dim);
+		let path_to_dim_backup = path_to_backup_dir.join(&current_time).join(dim);
 
 		//get the path to the region files for this dimension
 		let region_files = fs::read_dir(path_to_world.join(dim))
@@ -197,9 +200,9 @@ fn iterative_backup(path_to_world: &Path, path_to_backup_dir: &Path, dims: Vec<&
 	}
 }
 
-fn init_backup_dir(path_to_backup_dir: &Path, dims: &Vec<&Path>) -> () {
+fn init_backup_dir(path_to_backup_dir: &Path, dims: &Vec<&Path>, current_time: &String) -> () {
 	//create directory to store new backup
-	let new_backup_dir = path_to_backup_dir.join(current_time_as_string());
+	let new_backup_dir = path_to_backup_dir.join(&current_time);
 	fs::create_dir_all(&new_backup_dir).expect("failed to create backup directory");
 
 	for dim in dims.iter() {
