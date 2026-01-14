@@ -2,7 +2,7 @@ use std::ffi::OsString;
 use std::fs::{self, DirEntry, Metadata};
 use std::io::ErrorKind;
 use std::io::{BufWriter, Write};
-use std::path::Path;
+use std::path::{self, Path};
 use std::path::PathBuf;
 use time::OffsetDateTime;
 use time::macros::format_description;
@@ -13,9 +13,9 @@ const FORMAT: &[time::format_description::FormatItem<'static>] =
 
 fn main() {
 	//temp, will be moved to config later
-	let world_path = "testworld";
-	let path_to_backup_dir = "testbackup";
-	let dims = vec!["region", "DIM1/region", "DIM-1/region"]; //vanilla minecraft uses these three directories. add support for additional directories for modded worlds
+	let world_path = Path::new("testworld");
+	let path_to_backup_dir = Path::new("testbackup");
+	let dims = vec![Path::new("region"), Path::new("DIM1/region"), Path::new("DIM-1/region")]; //vanilla minecraft uses these three directories. add support for additional directories for modded worlds
 	//let backup_frequency; //add flag to force backup
 
 	//check if previous backup exists
@@ -25,26 +25,23 @@ fn main() {
 	}
 }
 
-fn full_backup(world_path: &str, path_to_backup_dir: &str, dims: Vec<&str>) -> () {
+fn full_backup(world_path: &Path, path_to_backup_dir: &Path, dims: Vec<&Path>) -> () {
 	//create directory to store new backup
 	new_backup_dir(path_to_backup_dir, &dims);
 
 	for dim in dims {
-		let path_to_dim_backup = format!(
-			"{}/{}/{}",
-			path_to_backup_dir,
-			OffsetDateTime::now_local()
+		let path_to_dim_backup = Path::new(path_to_backup_dir)
+			.join(OffsetDateTime::now_local()
 				.expect("could not get local time")
 				.format(&FORMAT)
-				.expect("could not convert time to String"),
-			dim
-		);
+				.expect("could not convert time to String"))
+			.join(dim);
 
 		//create empty csv so we don't have issues doing iterative backups later
-		fs::File::create(format!("{}/{}.csv", path_to_dim_backup, "manifest"))
+		fs::File::create(path_to_dim_backup.join("manifest.csv"))
 			.expect("failed to create manifest.csv");
 
-		let path_to_regions = format!("{}/{}", world_path, dim);
+		let path_to_regions = world_path.join(dim);
 
 		let regions = fs::read_dir(&path_to_regions)
 			.expect("world files unreadable")
@@ -59,15 +56,15 @@ fn full_backup(world_path: &str, path_to_backup_dir: &str, dims: Vec<&str>) -> (
 
 		for region in regions {
 			fs::copy(
-				format!("{}/{}", &path_to_regions, region),
-				format!("{}/{}", path_to_dim_backup, &region),
+				path_to_regions.join(region.as_str()),
+				path_to_dim_backup.join(region.as_str()),
 			)
 			.expect("copying region file failed");
 		}
 	}
 }
 
-fn iterative_backup(world_path: &str, path_to_backup_dir: &str, dims: Vec<&str>) -> () {
+fn iterative_backup(world_path: &Path, path_to_backup_dir: &Path, dims: Vec<&Path>) -> () {
 	//get a list of old backups
 	let mut backups = fs::read_dir(path_to_backup_dir)
 		.expect("backup dir inaccessible")
@@ -83,11 +80,11 @@ fn iterative_backup(world_path: &str, path_to_backup_dir: &str, dims: Vec<&str>)
 	//find most recent backup by sorting, reversing, and getting the first element
 	backups.sort();
 	backups.reverse();
-	let most_recent_backup = backups.get(0).expect("backup dir empty");
+	let most_recent_backup = Path::new(backups.get(0).expect("backup dir empty"));
 
 	//get the timestamp of the backup
 	let most_recent_backup_timestamp =
-		PrimitiveDateTime::parse(most_recent_backup.as_str(), &FORMAT)
+		PrimitiveDateTime::parse(most_recent_backup.to_str().expect("could not convert &path to &str"), &FORMAT)
 			.expect("could not poarse time string")
 			.assume_offset(
 				UtcOffset::current_local_offset().expect("could not get current timezone"),
@@ -98,18 +95,14 @@ fn iterative_backup(world_path: &str, path_to_backup_dir: &str, dims: Vec<&str>)
 
 	//for each dimension,
 	for dim in dims {
-		let path_to_dim_backup = format!(
-			"{}/{}/{}",
-			path_to_backup_dir,
-			OffsetDateTime::now_local()
+		let path_to_dim_backup = path_to_backup_dir.join(OffsetDateTime::now_local()
 				.expect("could not get local time")
 				.format(&FORMAT)
-				.expect("could not convert time to String"),
-			dim
-		);
+				.expect("could not convert time to String"))
+			.join(dim);
 
 		//get the names of the region files for this dimension
-		let mut region_files = fs::read_dir(format!("{}/{}", world_path, dim))
+		let mut region_files = fs::read_dir(world_path.join(dim))
 			.expect("world files unreadable")
 			.map(|region| {
 				region
@@ -124,7 +117,7 @@ fn iterative_backup(world_path: &str, path_to_backup_dir: &str, dims: Vec<&str>)
 		region_files.sort();
 
 		//csv to store paths to old region copies
-		let output_csv = fs::File::create(format!("{}/{}.csv", path_to_dim_backup, "manifest"))
+		let output_csv = fs::File::create(path_to_dim_backup.join("manifest.csv"))
 			.expect("failed to create manifest.csv");
 		let mut csv_writer = BufWriter::new(output_csv);
 
@@ -132,7 +125,7 @@ fn iterative_backup(world_path: &str, path_to_backup_dir: &str, dims: Vec<&str>)
 		for region_file in region_files {
 			//check modified timestamp for changes
 			let modified_timestamp = OffsetDateTime::from(
-				fs::metadata(format!("{}/{}/{}", world_path, dim, region_file))
+				fs::metadata(world_path.join(dim).join(&region_file))
 					.expect("failed to read metadata")
 					.modified()
 					.expect("failed to read timestamp"),
@@ -142,18 +135,17 @@ fn iterative_backup(world_path: &str, path_to_backup_dir: &str, dims: Vec<&str>)
 			match modified_timestamp >= most_recent_backup_timestamp {
 				true => {
 					fs::copy(
-						format!("{}/{}/{}", world_path, dim, region_file),
-						format!("{}/{}", path_to_dim_backup, &region_file),
+						world_path.join(dim).join(&region_file),
+						path_to_dim_backup.join(&region_file),
 					)
 					.expect("copying region file failed");
 				} //has been modified since last backup, needs to be updated
 				false => {
 					//hasn't been modified since last backup, insert path to older backup of the region
 					//check previous backup directory for the region
-					if fs::read_dir(format!(
-						"{}/{}/{}",
-						path_to_backup_dir, most_recent_backup, dim
-					))
+					if fs::read_dir(
+						path_to_backup_dir.join(most_recent_backup).join(dim)
+					)
 					.expect("could not read most recent backup")
 					.map(|directory| {
 						directory
@@ -167,14 +159,15 @@ fn iterative_backup(world_path: &str, path_to_backup_dir: &str, dims: Vec<&str>)
 						//found in previous backup's files, so put a reference to it
 						csv_writer
 							.write_all(
-								format!("{}/{}/{},", most_recent_backup, dim, region_file)
-									.as_bytes(),
-							)
+							format!("{},",
+									most_recent_backup.join(dim).join(region_file)
+										.to_str()
+										.expect("failed to convert path to str")
+							).as_bytes())
 							.expect("failed to write to csv");
-					} else if let Some(path) = fs::read_to_string(format!( //check if the previous backup's manifest has the region
-						"{}/{}/{}/manifest.csv",
-						path_to_backup_dir, most_recent_backup, dim
-					))
+					} else if let Some(path) = fs::read_to_string( //check if the previous backup's manifest has the region
+						Path::new(path_to_backup_dir).join(most_recent_backup).join(dim).join("manifest.csv")
+					)
 					.expect("manifest read failed")
 					.split(",")
 					.find(|item| item.contains(region_file.as_str()))
@@ -185,8 +178,8 @@ fn iterative_backup(world_path: &str, path_to_backup_dir: &str, dims: Vec<&str>)
 							.expect("could not write to manifest");
 					} else { //something screwy is going on. copy the file and move on
 						fs::copy(
-							format!("{}/{}/{}", world_path, dim, region_file),
-							format!("{}/{}", path_to_dim_backup, &region_file),
+							world_path.join(dim).join(&region_file),
+							path_to_dim_backup.join(&region_file),
 						)
 						.expect("copying region file failed");
 					}
@@ -196,26 +189,23 @@ fn iterative_backup(world_path: &str, path_to_backup_dir: &str, dims: Vec<&str>)
 	}
 }
 
-fn new_backup_dir(path_to_backup_dir: &str, dims: &Vec<&str>) -> () {
+fn new_backup_dir(path_to_backup_dir: &Path, dims: &Vec<&Path>) -> () {
 	//create directory to store new backup
-	let new_backup = format!(
-		"{}/{}",
-		path_to_backup_dir,
-		OffsetDateTime::now_local()
-			.expect("could not get local time")
-			.format(&FORMAT)
-			.expect("could not convert time to String")
+	let new_backup = path_to_backup_dir.join(OffsetDateTime::now_local()
+		.expect("could not get local time")
+		.format(&FORMAT)
+		.expect("could not convert time to String")
 	);
 	fs::create_dir_all(&new_backup).expect("failed to create backup directory");
 
 	for dim in dims.iter() {
 		//create new directory in backup directory to store this dimension
-		fs::create_dir_all(format!("{}/{}", new_backup, dim))
+		fs::create_dir_all(new_backup.join(dim))
 			.expect("failed to create dimension backup directory");
 	}
 }
 
-fn prev_backup_exists(path_to_backup_dir: &str) -> bool {
+fn prev_backup_exists(path_to_backup_dir: &Path) -> bool {
 	fs::read_dir(path_to_backup_dir)
 		.expect("backup dir could not be read")
 		.next()
