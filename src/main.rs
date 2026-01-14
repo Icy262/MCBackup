@@ -2,8 +2,8 @@ use std::ffi::OsString;
 use std::fs::{self, DirEntry, Metadata};
 use std::io::ErrorKind;
 use std::io::{BufWriter, Write};
-use std::path::{self, Path};
 use std::path::PathBuf;
+use std::path::{self, Path};
 use time::OffsetDateTime;
 use time::macros::format_description;
 use time::{PrimitiveDateTime, UtcOffset};
@@ -15,7 +15,11 @@ fn main() {
 	//temp, will be moved to config later
 	let world_path = Path::new("testworld");
 	let path_to_backup_dir = Path::new("testbackup");
-	let dims = vec![Path::new("region"), Path::new("DIM1/region"), Path::new("DIM-1/region")]; //vanilla minecraft uses these three directories. add support for additional directories for modded worlds
+	let dims = vec![
+		Path::new("region"),
+		Path::new("DIM1/region"),
+		Path::new("DIM-1/region"),
+	]; //vanilla minecraft uses these three directories. add support for additional directories for modded worlds
 	//let backup_frequency; //add flag to force backup
 
 	//check if previous backup exists
@@ -31,10 +35,12 @@ fn full_backup(world_path: &Path, path_to_backup_dir: &Path, dims: Vec<&Path>) -
 
 	for dim in dims {
 		let path_to_dim_backup = Path::new(path_to_backup_dir)
-			.join(OffsetDateTime::now_local()
-				.expect("could not get local time")
-				.format(&FORMAT)
-				.expect("could not convert time to String"))
+			.join(
+				OffsetDateTime::now_local()
+					.expect("could not get local time")
+					.format(&FORMAT)
+					.expect("could not convert time to String"),
+			)
 			.join(dim);
 
 		//create empty csv so we don't have issues doing iterative backups later
@@ -83,22 +89,27 @@ fn iterative_backup(world_path: &Path, path_to_backup_dir: &Path, dims: Vec<&Pat
 	let most_recent_backup = Path::new(backups.get(0).expect("backup dir empty"));
 
 	//get the timestamp of the backup
-	let most_recent_backup_timestamp =
-		PrimitiveDateTime::parse(most_recent_backup.to_str().expect("could not convert &path to &str"), &FORMAT)
-			.expect("could not poarse time string")
-			.assume_offset(
-				UtcOffset::current_local_offset().expect("could not get current timezone"),
-			);
+	let most_recent_backup_timestamp = PrimitiveDateTime::parse(
+		most_recent_backup
+			.to_str()
+			.expect("could not convert &path to &str"),
+		&FORMAT,
+	)
+	.expect("could not poarse time string")
+	.assume_offset(UtcOffset::current_local_offset().expect("could not get current timezone"));
 
 	//create directory to store new backup
 	new_backup_dir(path_to_backup_dir, &dims);
 
 	//for each dimension,
 	for dim in dims {
-		let path_to_dim_backup = path_to_backup_dir.join(OffsetDateTime::now_local()
-				.expect("could not get local time")
-				.format(&FORMAT)
-				.expect("could not convert time to String"))
+		let path_to_dim_backup = path_to_backup_dir
+			.join(
+				OffsetDateTime::now_local()
+					.expect("could not get local time")
+					.format(&FORMAT)
+					.expect("could not convert time to String"),
+			)
 			.join(dim);
 
 		//get the names of the region files for this dimension
@@ -143,30 +154,38 @@ fn iterative_backup(world_path: &Path, path_to_backup_dir: &Path, dims: Vec<&Pat
 				false => {
 					//hasn't been modified since last backup, insert path to older backup of the region
 					//check previous backup directory for the region
-					if fs::read_dir(
-						path_to_backup_dir.join(most_recent_backup).join(dim)
-					)
-					.expect("could not read most recent backup")
-					.map(|directory| {
-						directory
-							.expect("backup inacessible")
-							.file_name()
-							.into_string()
-							.expect("could not convert os string to String")
-					})
-					.any(|region_name| *region_name == region_file)
-					{ //previous backup has the region
+					if fs::read_dir(path_to_backup_dir.join(most_recent_backup).join(dim))
+						.expect("could not read most recent backup")
+						.map(|directory| {
+							directory
+								.expect("backup inacessible")
+								.file_name()
+								.into_string()
+								.expect("could not convert os string to String")
+						})
+						.any(|region_name| *region_name == region_file)
+					{
+						//previous backup has the region
 						//found in previous backup's files, so put a reference to it
 						csv_writer
 							.write_all(
-							format!("{},",
-									most_recent_backup.join(dim).join(region_file)
+								format!(
+									"{},",
+									most_recent_backup
+										.join(dim)
+										.join(region_file)
 										.to_str()
 										.expect("failed to convert path to str")
-							).as_bytes())
+								)
+								.as_bytes(),
+							)
 							.expect("failed to write to csv");
-					} else if let Some(path) = fs::read_to_string( //check if the previous backup's manifest has the region
-						Path::new(path_to_backup_dir).join(most_recent_backup).join(dim).join("manifest.csv")
+					} else if let Some(path) = fs::read_to_string(
+						//check if the previous backup's manifest has the region
+						Path::new(path_to_backup_dir)
+							.join(most_recent_backup)
+							.join(dim)
+							.join("manifest.csv"),
 					)
 					.expect("manifest read failed")
 					.split(",")
@@ -176,7 +195,8 @@ fn iterative_backup(world_path: &Path, path_to_backup_dir: &Path, dims: Vec<&Pat
 						csv_writer
 							.write_all(format!("{},", path).as_bytes())
 							.expect("could not write to manifest");
-					} else { //something screwy is going on. copy the file and move on
+					} else {
+						//something screwy is going on. copy the file and move on
 						fs::copy(
 							world_path.join(dim).join(&region_file),
 							path_to_dim_backup.join(&region_file),
@@ -191,10 +211,11 @@ fn iterative_backup(world_path: &Path, path_to_backup_dir: &Path, dims: Vec<&Pat
 
 fn new_backup_dir(path_to_backup_dir: &Path, dims: &Vec<&Path>) -> () {
 	//create directory to store new backup
-	let new_backup = path_to_backup_dir.join(OffsetDateTime::now_local()
-		.expect("could not get local time")
-		.format(&FORMAT)
-		.expect("could not convert time to String")
+	let new_backup = path_to_backup_dir.join(
+		OffsetDateTime::now_local()
+			.expect("could not get local time")
+			.format(&FORMAT)
+			.expect("could not convert time to String"),
 	);
 	fs::create_dir_all(&new_backup).expect("failed to create backup directory");
 
