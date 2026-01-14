@@ -25,7 +25,25 @@ fn main() {
 	}
 }
 
-fn full_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {}
+fn full_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {	
+	// //create directory to store new backup
+	// new_backup_dir(backup_dir);
+	
+	// for dim in dims {
+	// 	//create empty csv so we don't have issues doing iterative backups later
+	// 	let output_csv = fs::File::create(format!("{}/{}.csv", , "manifest"))
+	// 			.expect("failed to create manifest.csv");
+	// 	fs::copy(
+	// 					&region_file,
+	// 					format!(
+	// 						"{}/{}",
+	// 						this_dim_backup,
+	// 						&region_file
+	// 					),
+	// 				)
+	// 				.expect("copying region file failed");
+	// }
+}
 
 fn iterative_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {
 	//get a list of old backups
@@ -48,7 +66,14 @@ fn iterative_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {
 
 	//for each dimension,
 	for dim in dims {
-		let this_dim_backup = format!("{}/{}", new_backup, dim);
+		let this_dim_backup = format!("{}/{}/{}",
+			backup_dir,
+			OffsetDateTime::now_local()
+				.expect("could not get local time")
+				.format(&FORMAT)
+				.expect("could not convert time to String"),
+				dim
+		);
 
 		//create new directory in backup directory to store this dimension
 		fs::create_dir(&this_dim_backup).expect("failed to create dimension backup directory");
