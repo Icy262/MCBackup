@@ -1,8 +1,8 @@
 use std::fs::{self, DirEntry, Metadata};
 use std::io::BufWriter;
-use time::{PrimitiveDateTime, UtcOffset};
 use time::OffsetDateTime;
 use time::macros::format_description;
+use time::{PrimitiveDateTime, UtcOffset};
 
 const FORMAT: &[time::format_description::FormatItem<'static>] =
 	format_description!("[year]-[month]-[day]T[hour]-[minute]");
@@ -25,10 +25,10 @@ fn main() {
 	}
 }
 
-fn full_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {	
+fn full_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {
 	// //create directory to store new backup
 	// new_backup_dir(backup_dir);
-	
+
 	// for dim in dims {
 	// 	//create empty csv so we don't have issues doing iterative backups later
 	// 	let output_csv = fs::File::create(format!("{}/{}.csv", , "manifest"))
@@ -49,30 +49,41 @@ fn iterative_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {
 	//get a list of old backups
 	let mut backups = fs::read_dir(backup_dir)
 		.expect("backup dir inaccessible")
-		.map(|directory| directory.expect("backup inacessible").file_name().into_string().expect("could not convert os string to String"))
+		.map(|directory| {
+			directory
+				.expect("backup inacessible")
+				.file_name()
+				.into_string()
+				.expect("could not convert os string to String")
+		})
 		.collect::<Vec<String>>();
 
 	//find most recent backup by sorting, reversing, and getting the first element
 	backups.sort();
 	backups.reverse();
-	let most_recent_backup = backups.get(0)
-			.expect("backup dir empty");
+	let most_recent_backup = backups.get(0).expect("backup dir empty");
 
 	//get the timestamp of the backup
-	let most_recent_backup_timestamp = PrimitiveDateTime::parse(most_recent_backup.as_str(), &FORMAT).expect("could not poarse time string").assume_offset(UtcOffset::current_local_offset().expect("could not get current timezone"));
+	let most_recent_backup_timestamp =
+		PrimitiveDateTime::parse(most_recent_backup.as_str(), &FORMAT)
+			.expect("could not poarse time string")
+			.assume_offset(
+				UtcOffset::current_local_offset().expect("could not get current timezone"),
+			);
 
 	//create directory to store new backup
 	new_backup_dir(backup_dir);
 
 	//for each dimension,
 	for dim in dims {
-		let this_dim_backup = format!("{}/{}/{}",
+		let this_dim_backup = format!(
+			"{}/{}/{}",
 			backup_dir,
 			OffsetDateTime::now_local()
 				.expect("could not get local time")
 				.format(&FORMAT)
 				.expect("could not convert time to String"),
-				dim
+			dim
 		);
 
 		//create new directory in backup directory to store this dimension
@@ -81,7 +92,13 @@ fn iterative_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {
 		//get the names of the region files for this dimension
 		let mut region_files = fs::read_dir(format!("{}/{}", world_path, dim))
 			.expect("world files unreadable")
-			.map(|region| region.expect("region file could not be read").file_name().into_string().expect("could not convert os string to String"))
+			.map(|region| {
+				region
+					.expect("region file could not be read")
+					.file_name()
+					.into_string()
+					.expect("could not convert os string to String")
+			})
 			.collect::<Vec<String>>();
 
 		//sort files by name
@@ -99,7 +116,7 @@ fn iterative_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {
 				fs::metadata(format!("{}/{}/{}", world_path, dim, region_file))
 					.expect("failed to read metadata")
 					.modified()
-					.expect("failed to read timestamp")
+					.expect("failed to read timestamp"),
 			);
 
 			//compare time of modification to time of last backup
@@ -107,19 +124,25 @@ fn iterative_backup(world_path: &str, backup_dir: &str, dims: Vec<&str>) -> () {
 				true => {
 					fs::copy(
 						&region_file,
-						format!(
-							"{}/{}",
-							this_dim_backup,
-							&region_file
-						),
+						format!("{}/{}", this_dim_backup, &region_file),
 					)
 					.expect("copying region file failed");
 				} //has been modified since last backup, needs to be updated
-				false => { //hasn't been modified since last backup, insert path to older backup of the region
+				false => {
+					//hasn't been modified since last backup, insert path to older backup of the region
 					//check previous backup directory for the region
-					if fs::read_dir(format!("{}/{}", most_recent_backup, dim)).expect("could not read most recent backup").map(|directory| directory.expect("backup inacessible").file_name().into_string().expect("could not convert os string to String")).find(|region_name| *region_name == region_file).is_some() {
-
-					}
+					if fs::read_dir(format!("{}/{}", most_recent_backup, dim))
+						.expect("could not read most recent backup")
+						.map(|directory| {
+							directory
+								.expect("backup inacessible")
+								.file_name()
+								.into_string()
+								.expect("could not convert os string to String")
+						})
+						.find(|region_name| *region_name == region_file)
+						.is_some()
+					{}
 
 					//check previous backup manifest for the region
 				}
