@@ -58,10 +58,7 @@ fn iterative_backup(
 	current_time: String,
 ) -> () {
 	//get the paths to the backups in the backup directory
-	let mut path_to_backups = fs::read_dir(path_to_backup_dir)
-		.expect("backup dir inaccessible")
-		.map(|directory| directory.expect("backup inacessible").path())
-		.collect::<Vec<PathBuf>>();
+	let mut path_to_backups = get_files_in_dir(path_to_backup_dir);
 
 	//find most recent backup by sorting, reversing, and getting the first element
 	path_to_backups.sort();
