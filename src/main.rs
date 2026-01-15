@@ -69,16 +69,12 @@ fn iterative_backup(
 	let path_to_most_recent_backup = path_to_backups.get(0).expect("backup dir empty");
 
 	//get the timestamp of the backup
-	let most_recent_backup_timestamp = PrimitiveDateTime::parse(
-		path_to_most_recent_backup
-			.file_name()
-			.expect("&PathBuf to &OsStr conversion failed")
-			.to_str()
-			.expect("OsStr to Str conversion failed"),
-		&FORMAT,
-	)
-	.expect("could not parse time string")
-	.assume_offset(UtcOffset::current_local_offset().expect("could not get current timezone"));
+	let most_recent_backup_timestamp =
+		PrimitiveDateTime::parse(get_file_name_as_str(path_to_most_recent_backup), &FORMAT)
+			.expect("could not parse time string")
+			.assume_offset(
+				UtcOffset::current_local_offset().expect("could not get current timezone"),
+			);
 
 	//create directory to store new backup. MUST go after finding the most recent backup because if not the most recent check will fail
 	init_backup_dir(path_to_backup_dir, &dims, &current_time);
@@ -154,15 +150,8 @@ fn iterative_backup(
 						)
 						.expect("most recent backup manifest read failed")
 						.split(",")
-						.find(|item| {
-							item.contains(
-								region_file
-									.file_name()
-									.expect("could not get region file name")
-									.to_str()
-									.expect("region file name to str conversion failed"),
-							)
-						}) {
+						.find(|item| item.contains(get_file_name_as_str(&region_file)))
+					{
 						//found the path in the old manifest
 						//write the path we found to the new manifest
 						csv_writer
@@ -227,10 +216,6 @@ fn get_file_timestamp(region_file: &PathBuf) -> OffsetDateTime {
 	)
 }
 
-fn timestamp_as_string_to_OffsetDateTime() -> () {
-	
-}
-
 fn get_files_in_dir(path_to_directory: &PathBuf) -> Vec<PathBuf> {
 	//will get the files in the directory
 	fs::read_dir(&path_to_directory)
@@ -252,4 +237,12 @@ fn copy_entire_dir(path_to_src_dir: &PathBuf, path_to_dest_dir: &PathBuf) -> () 
 		)
 		.expect("Copy should be copyable");
 	}
+}
+
+fn get_file_name_as_str(path_to_file: &PathBuf) -> &str {
+	path_to_file
+		.file_name()
+		.expect("Should be able to get the file name of the file referenced in the path")
+		.to_str()
+		.expect("Should be able to convert OsString to String")
 }
