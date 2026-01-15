@@ -43,10 +43,7 @@ fn full_backup(path_to_world: &PathBuf, path_to_backup_dir: &PathBuf, dims: &Vec
 		let path_to_regions = path_to_world.join(dim);
 
 		//get the paths to this dim's regions
-		let regions = fs::read_dir(&path_to_regions)
-			.expect("world files unreadable")
-			.map(|region| region.expect("region file could not be read").path())
-			.collect::<Vec<PathBuf>>();
+		let regions = get_files_in_dir(&path_to_regions);
 
 		//for each region,
 		for region in regions {
@@ -94,10 +91,7 @@ fn iterative_backup(path_to_world: &PathBuf, path_to_backup_dir: &PathBuf, dims:
 		let path_to_dim_backup = path_to_backup_dir.join(&current_time).join(dim);
 
 		//get the path to the region files for this dimension
-		let region_files = fs::read_dir(path_to_world.join(dim))
-			.expect("world files unreadable")
-			.map(|region| region.expect("region file could not be read").path())
-			.collect::<Vec<PathBuf>>();
+		let region_files = get_files_in_dir(&path_to_world.join(dim));
 
 		//create writer to manifest csv
 		let mut csv_writer = BufWriter::new(
@@ -233,4 +227,11 @@ fn get_file_timestamp(region_file: &PathBuf) -> OffsetDateTime {
 			.modified()
 			.expect("failed to read timestamp"),
 	)
+}
+
+fn get_files_in_dir(path_to_directory: &PathBuf) -> Vec<PathBuf> { //will get the files in the directory
+	fs::read_dir(&path_to_directory)
+		.expect("Directory must be readable")
+		.map(|file| file.expect("File must be readable").path())
+		.collect::<Vec<PathBuf>>()
 }
