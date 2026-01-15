@@ -12,12 +12,12 @@ const FORMAT: &[time::format_description::FormatItem<'static>] =
 
 fn main() {
 	//temp, will be moved to config later
-	let path_to_world = Path::new("testworld");
-	let path_to_backup_dir = Path::new("testbackup");
+	let path_to_world = PathBuf::from("testworld");
+	let path_to_backup_dir = PathBuf::from("testbackup");
 	let dims = vec![
-		Path::new("region"),
-		Path::new("DIM1/region"),
-		Path::new("DIM-1/region"),
+		PathBuf::from("region"),
+		PathBuf::from("DIM1/region"),
+		PathBuf::from("DIM-1/region"),
 	]; //vanilla minecraft uses these three directories. add support for additional directories for modded worlds
 	//let backup_frequency; //add flag to force backup
 
@@ -25,15 +25,15 @@ fn main() {
 	let current_time = current_time_as_string();
 
 	//check if previous backup exists
-	match prev_backup_exists(path_to_backup_dir) {
-		true => full_backup(path_to_world, path_to_backup_dir, dims, current_time), //if no previous backups, perform full backup
-		false => iterative_backup(path_to_world, path_to_backup_dir, dims, current_time), // if there are previous backups, perform iterative backup
+	match prev_backup_exists(&path_to_backup_dir) {
+		true => full_backup(&path_to_world, &path_to_backup_dir, &dims, current_time), //if no previous backups, perform full backup
+		false => iterative_backup(&path_to_world, &path_to_backup_dir, &dims, current_time), // if there are previous backups, perform iterative backup
 	}
 }
 
-fn full_backup(path_to_world: &Path, path_to_backup_dir: &Path, dims: Vec<&Path>, current_time: String) -> () {
+fn full_backup(path_to_world: &PathBuf, path_to_backup_dir: &PathBuf, dims: &Vec<PathBuf>, current_time: String) -> () {
 	//create directory to store new backup
-	init_backup_dir(path_to_backup_dir, &dims, &current_time);
+	init_backup_dir(&path_to_backup_dir, &dims, &current_time);
 
 	//for each dimension to backup,
 	for dim in dims {
@@ -62,7 +62,7 @@ fn full_backup(path_to_world: &Path, path_to_backup_dir: &Path, dims: Vec<&Path>
 	}
 }
 
-fn iterative_backup(path_to_world: &Path, path_to_backup_dir: &Path, dims: Vec<&Path>, current_time: String) -> () {
+fn iterative_backup(path_to_world: &PathBuf, path_to_backup_dir: &PathBuf, dims: &Vec<PathBuf>, current_time: String) -> () {
 	//get the paths to the backups in the backup directory
 	let mut path_to_backups = fs::read_dir(path_to_backup_dir)
 		.expect("backup dir inaccessible")
@@ -200,7 +200,7 @@ fn iterative_backup(path_to_world: &Path, path_to_backup_dir: &Path, dims: Vec<&
 	}
 }
 
-fn init_backup_dir(path_to_backup_dir: &Path, dims: &Vec<&Path>, current_time: &String) -> () {
+fn init_backup_dir(path_to_backup_dir: &PathBuf, dims: &Vec<PathBuf>, current_time: &String) -> () {
 	//create directory to store new backup
 	let new_backup_dir = path_to_backup_dir.join(&current_time);
 	fs::create_dir_all(&new_backup_dir).expect("failed to create backup directory");
@@ -216,7 +216,7 @@ fn init_backup_dir(path_to_backup_dir: &Path, dims: &Vec<&Path>, current_time: &
 	}
 }
 
-fn prev_backup_exists(path_to_backup_dir: &Path) -> bool {
+fn prev_backup_exists(path_to_backup_dir: &PathBuf) -> bool {
 	fs::read_dir(path_to_backup_dir)
 		.expect("backup dir could not be read")
 		.next()
