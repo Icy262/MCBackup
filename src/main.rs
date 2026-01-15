@@ -66,12 +66,8 @@ fn iterative_backup(
 	let path_to_most_recent_backup = path_to_backups.get(0).expect("backup dir empty");
 
 	//get the timestamp of the backup
-	let most_recent_backup_timestamp =
-		PrimitiveDateTime::parse(get_file_name_as_str(path_to_most_recent_backup), &FORMAT)
-			.expect("could not parse time string")
-			.assume_offset(
-				UtcOffset::current_local_offset().expect("could not get current timezone"),
-			);
+	let most_recent_backup_timestamp = timestamp_as_str_to_OffsetDateTime(get_file_name_as_str(path_to_most_recent_backup));
+		
 
 	//create directory to store new backup. MUST go after finding the most recent backup because if not the most recent check will fail
 	init_backup_dir(path_to_backup_dir, &dims, &current_time);
@@ -242,4 +238,13 @@ fn get_file_name_as_str(path_to_file: &PathBuf) -> &str {
 		.expect("Should be able to get the file name of the file referenced in the path")
 		.to_str()
 		.expect("Should be able to convert OsString to String")
+}
+
+#[allow(non_snake_case)]
+fn timestamp_as_str_to_OffsetDateTime(timestamp: &str) -> OffsetDateTime {
+	PrimitiveDateTime::parse(timestamp, &FORMAT)
+		.expect("Should be able to parse timestamp")
+		.assume_offset(
+			UtcOffset::current_local_offset().expect("Should be able to get time zone"),
+		)
 }
