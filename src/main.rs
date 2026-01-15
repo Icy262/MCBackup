@@ -26,8 +26,8 @@ fn main() {
 
 	//check if previous backup exists
 	match prev_backup_exists(&path_to_backup_dir) {
-		true => full_backup(&path_to_world, &path_to_backup_dir, &dims, current_time), //if no previous backups, perform full backup
-		false => iterative_backup(&path_to_world, &path_to_backup_dir, &dims, current_time), // if there are previous backups, perform iterative backup
+		false => full_backup(&path_to_world, &path_to_backup_dir, &dims, current_time), //if no previous backups, perform full backup
+		true => iterative_backup(&path_to_world, &path_to_backup_dir, &dims, current_time), // if there are previous backups, perform iterative backup
 	}
 }
 
@@ -222,7 +222,7 @@ fn prev_backup_exists(path_to_backup_dir: &PathBuf) -> bool {
 	fs::read_dir(path_to_backup_dir)
 		.expect("backup dir could not be read")
 		.next()
-		.is_none()
+		.is_some()
 }
 
 fn current_time_as_string() -> String {
