@@ -171,6 +171,8 @@ fn iterative_backup(path_to_world: &PathBuf, path_to_backup_dir: &PathBuf, dims:
 						.find(|item| {
 							item.contains(
 								region_file
+									.file_name()
+									.expect("could not get region file name")
 									.to_str()
 									.expect("region file name to str conversion failed"),
 							)
