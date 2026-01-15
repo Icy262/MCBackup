@@ -30,7 +30,12 @@ fn main() {
 	}
 }
 
-fn full_backup(path_to_world: &PathBuf, path_to_backup_dir: &PathBuf, dims: &Vec<PathBuf>, current_time: String) -> () {
+fn full_backup(
+	path_to_world: &PathBuf,
+	path_to_backup_dir: &PathBuf,
+	dims: &Vec<PathBuf>,
+	current_time: String,
+) -> () {
 	//create directory to store new backup
 	init_backup_dir(&path_to_backup_dir, &dims, &current_time);
 
@@ -46,7 +51,12 @@ fn full_backup(path_to_world: &PathBuf, path_to_backup_dir: &PathBuf, dims: &Vec
 	}
 }
 
-fn iterative_backup(path_to_world: &PathBuf, path_to_backup_dir: &PathBuf, dims: &Vec<PathBuf>, current_time: String) -> () {
+fn iterative_backup(
+	path_to_world: &PathBuf,
+	path_to_backup_dir: &PathBuf,
+	dims: &Vec<PathBuf>,
+	current_time: String,
+) -> () {
 	//get the paths to the backups in the backup directory
 	let mut path_to_backups = fs::read_dir(path_to_backup_dir)
 		.expect("backup dir inaccessible")
@@ -217,7 +227,12 @@ fn get_file_timestamp(region_file: &PathBuf) -> OffsetDateTime {
 	)
 }
 
-fn get_files_in_dir(path_to_directory: &PathBuf) -> Vec<PathBuf> { //will get the files in the directory
+fn timestamp_as_string_to_OffsetDateTime() -> () {
+	
+}
+
+fn get_files_in_dir(path_to_directory: &PathBuf) -> Vec<PathBuf> {
+	//will get the files in the directory
 	fs::read_dir(&path_to_directory)
 		.expect("Directory must be readable")
 		.map(|file| file.expect("File must be readable").path())
@@ -233,7 +248,7 @@ fn copy_entire_dir(path_to_src_dir: &PathBuf, path_to_dest_dir: &PathBuf) -> () 
 		//copy the rfileegion from the source dir to the destination dir
 		fs::copy(
 			&file,
-			&path_to_dest_dir.join(file.file_name().expect("File name should be readable"))
+			&path_to_dest_dir.join(file.file_name().expect("File name should be readable")),
 		)
 		.expect("Copy should be copyable");
 	}
