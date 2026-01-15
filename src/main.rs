@@ -1,7 +1,6 @@
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
-use std::path::Path;
 use std::path::PathBuf;
 use time::OffsetDateTime;
 use time::macros::format_description;
@@ -111,12 +110,7 @@ fn iterative_backup(path_to_world: &PathBuf, path_to_backup_dir: &PathBuf, dims:
 		//for each region file,
 		for region_file in region_files {
 			//get the timestamp of the region's last modification
-			let modified_timestamp = OffsetDateTime::from(
-				fs::metadata(&region_file)
-					.expect("failed to read metadata")
-					.modified()
-					.expect("failed to read timestamp"),
-			);
+			let modified_timestamp = get_file_timestamp(&region_file);
 
 			//compare last modification timestamp to last backup timestamp to determine if a new copy needs to be taken
 			match modified_timestamp >= most_recent_backup_timestamp {
@@ -230,4 +224,13 @@ fn current_time_as_string() -> String {
 		.expect("could not get local time")
 		.format(&FORMAT)
 		.expect("could not convert time to String")
+}
+
+fn get_file_timestamp(region_file: &PathBuf) -> OffsetDateTime {
+	OffsetDateTime::from(
+		fs::metadata(&region_file)
+			.expect("failed to read metadata")
+			.modified()
+			.expect("failed to read timestamp"),
+	)
 }
