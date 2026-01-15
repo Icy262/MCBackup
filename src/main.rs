@@ -42,19 +42,7 @@ fn full_backup(path_to_world: &PathBuf, path_to_backup_dir: &PathBuf, dims: &Vec
 		//generate the path to this dim's regions
 		let path_to_regions = path_to_world.join(dim);
 
-		//get the paths to this dim's regions
-		let regions = get_files_in_dir(&path_to_regions);
-
-		//for each region,
-		for region in regions {
-			//copy the region from the world to the backup
-			fs::copy(
-				&region,
-				path_to_dim_backup
-					.join(&region.file_name().expect("failed to get the region name")),
-			)
-			.expect("copying region file failed");
-		}
+		copy_entire_dir(&path_to_regions, &path_to_dim_backup);
 	}
 }
 
@@ -234,4 +222,19 @@ fn get_files_in_dir(path_to_directory: &PathBuf) -> Vec<PathBuf> { //will get th
 		.expect("Directory must be readable")
 		.map(|file| file.expect("File must be readable").path())
 		.collect::<Vec<PathBuf>>()
+}
+
+fn copy_entire_dir(path_to_src_dir: &PathBuf, path_to_dest_dir: &PathBuf) -> () {
+	//get the paths to every file in this dir
+	let files = get_files_in_dir(&path_to_src_dir);
+
+	//for each region,
+	for file in files {
+		//copy the rfileegion from the source dir to the destination dir
+		fs::copy(
+			&file,
+			&path_to_dest_dir.join(file.file_name().expect("File name should be readable"))
+		)
+		.expect("Copy should be copyable");
+	}
 }
