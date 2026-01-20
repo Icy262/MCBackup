@@ -5,11 +5,41 @@ use std::path::PathBuf;
 use time::OffsetDateTime;
 use time::macros::format_description;
 use time::{PrimitiveDateTime, UtcOffset};
+use clap::Parser;
+use clap::Subcommand;
 
 const FORMAT: &[time::format_description::FormatItem<'static>] =
 	format_description!("[year]-[month]-[day]T[hour]-[minute]");
 
+//Iterative backup tool for Minecraft
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Args {
+	//backup or restore mode
+	#[command(subcommand)]
+	mode: Mode
+}
+
+#[derive(Subcommand)]
+enum Mode {
+	//create a backup
+	Backup {
+		//full or iterative backup
+		#[arg(default_value = "iterative")]
+		backup_mode: String
+	},
+
+	//restore from a backup
+	Restore {
+		//timestamp to restore from
+		#[arg(default_value = "recent")]
+		restore_from: String
+	}
+}
+
 fn main() {
+	let args = Args::parse();
+
 	//temp, will be moved to config later
 	let path_to_world = PathBuf::from("testworld");
 	let path_to_backup_dir = PathBuf::from("testbackup");
@@ -23,10 +53,17 @@ fn main() {
 	//set directory timestamp
 	let current_time = current_time_as_string();
 
-	//check if previous backup exists
-	match prev_backup_exists(&path_to_backup_dir) {
-		false => full_backup(&path_to_world, &path_to_backup_dir, &dims, current_time), //if no previous backups, perform full backup
-		true => iterative_backup(&path_to_world, &path_to_backup_dir, &dims, current_time), // if there are previous backups, perform iterative backup
+	match args.mode {
+		Mode::Backup { backup_mode } => {
+			if backup_mode.as_str() == "iterative" && prev_backup_exists(&path_to_backup_dir) { //if there are previous backups and backup mode iterative specified,
+				iterative_backup(&path_to_world, &path_to_backup_dir, &dims, &current_time); //perform iterative backup
+			} else { //no previous backups or backup mode full specified,
+				full_backup(&path_to_world, &path_to_backup_dir, &dims, &current_time); //perform a full backup
+			}
+		}
+		Mode::Restore { restore_from } => {
+			restore(&path_to_world, &path_to_backup_dir, &dims, &restore_from);
+		}
 	}
 }
 
@@ -34,7 +71,7 @@ fn full_backup(
 	path_to_world: &PathBuf,
 	path_to_backup_dir: &PathBuf,
 	dims: &Vec<PathBuf>,
-	current_time: String,
+	current_time: &String,
 ) -> () {
 	//create directory to store new backup
 	init_backup_dir(&path_to_backup_dir, &dims, &current_time);
@@ -55,7 +92,7 @@ fn iterative_backup(
 	path_to_world: &PathBuf,
 	path_to_backup_dir: &PathBuf,
 	dims: &Vec<PathBuf>,
-	current_time: String,
+	current_time: &String,
 ) -> () {
 	//get the paths to the backups in the backup directory
 	let mut path_to_backups = get_files_in_dir(path_to_backup_dir);
@@ -170,10 +207,13 @@ fn iterative_backup(
 	}
 }
 
+fn restore(path_to_world: &PathBuf, path_to_backup_dir: &PathBuf, dims: &Vec<PathBuf>, timestamp: &String,) {
+}
+
 fn init_backup_dir(path_to_backup_dir: &PathBuf, dims: &Vec<PathBuf>, current_time: &String) -> () {
 	//create directory to store new backup
 	let new_backup_dir = path_to_backup_dir.join(&current_time);
-	fs::create_dir_all(&new_backup_dir).expect("failed to create backup directory");
+	fs::create_dir_all(&new_backup_dir).unwrap(); //panic if directory already exists
 
 	for dim in dims.iter() {
 		//create new directory in backup directory to store this dimension
