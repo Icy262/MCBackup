@@ -1,3 +1,5 @@
+use clap::Parser;
+use clap::Subcommand;
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
@@ -5,8 +7,6 @@ use std::path::PathBuf;
 use time::OffsetDateTime;
 use time::macros::format_description;
 use time::{PrimitiveDateTime, UtcOffset};
-use clap::Parser;
-use clap::Subcommand;
 
 const FORMAT: &[time::format_description::FormatItem<'static>] =
 	format_description!("[year]-[month]-[day]T[hour]-[minute]");
@@ -17,7 +17,7 @@ const FORMAT: &[time::format_description::FormatItem<'static>] =
 struct Args {
 	//backup or restore mode
 	#[command(subcommand)]
-	mode: Mode
+	mode: Mode,
 }
 
 #[derive(Subcommand)]
@@ -26,15 +26,15 @@ enum Mode {
 	Backup {
 		//full or iterative backup
 		#[arg(default_value = "iterative")]
-		backup_mode: String
+		backup_mode: String,
 	},
 
 	//restore from a backup
 	Restore {
 		//timestamp to restore from
 		#[arg(default_value = "recent")]
-		restore_from: String
-	}
+		restore_from: String,
+	},
 }
 
 fn main() {
@@ -55,9 +55,11 @@ fn main() {
 
 	match args.mode {
 		Mode::Backup { backup_mode } => {
-			if backup_mode.as_str() == "iterative" && prev_backup_exists(&path_to_backup_dir) { //if there are previous backups and backup mode iterative specified,
+			if backup_mode.as_str() == "iterative" && prev_backup_exists(&path_to_backup_dir) {
+				//if there are previous backups and backup mode iterative specified,
 				iterative_backup(&path_to_world, &path_to_backup_dir, &dims, &current_time); //perform iterative backup
-			} else { //no previous backups or backup mode full specified,
+			} else {
+				//no previous backups or backup mode full specified,
 				full_backup(&path_to_world, &path_to_backup_dir, &dims, &current_time); //perform a full backup
 			}
 		}
@@ -103,8 +105,8 @@ fn iterative_backup(
 	let path_to_most_recent_backup = path_to_backups.get(0).expect("backup dir empty");
 
 	//get the timestamp of the backup
-	let most_recent_backup_timestamp = timestamp_as_str_to_OffsetDateTime(get_file_name_as_str(path_to_most_recent_backup));
-		
+	let most_recent_backup_timestamp =
+		timestamp_as_str_to_OffsetDateTime(get_file_name_as_str(path_to_most_recent_backup));
 
 	//create directory to store new backup. MUST go after finding the most recent backup because if not the most recent check will fail
 	init_backup_dir(path_to_backup_dir, &dims, &current_time);
@@ -207,7 +209,12 @@ fn iterative_backup(
 	}
 }
 
-fn restore(path_to_world: &PathBuf, path_to_backup_dir: &PathBuf, dims: &Vec<PathBuf>, timestamp: &String,) {
+fn restore(
+	path_to_world: &PathBuf,
+	path_to_backup_dir: &PathBuf,
+	dims: &Vec<PathBuf>,
+	timestamp: &String,
+) {
 }
 
 fn init_backup_dir(path_to_backup_dir: &PathBuf, dims: &Vec<PathBuf>, current_time: &String) -> () {
@@ -284,7 +291,5 @@ fn get_file_name_as_str(path_to_file: &PathBuf) -> &str {
 fn timestamp_as_str_to_OffsetDateTime(timestamp: &str) -> OffsetDateTime {
 	PrimitiveDateTime::parse(timestamp, &FORMAT)
 		.expect("Should be able to parse timestamp")
-		.assume_offset(
-			UtcOffset::current_local_offset().expect("Should be able to get time zone"),
-		)
+		.assume_offset(UtcOffset::current_local_offset().expect("Should be able to get time zone"))
 }
