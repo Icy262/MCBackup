@@ -211,6 +211,16 @@ fn restore(
 ) -> () {
 }
 
+fn path_to_backup_generator(path_to_backup_dir: &PathBuf, timestamp: &String) -> PathBuf {
+	if timestamp == "recent" { //if most recent backup,
+		//find most recent
+		get_most_recent_backup(path_to_backup_dir)
+	} else { //find the backup specified,
+		//generate the path
+		path_to_backup_dir.join(timestamp)
+	}
+}
+
 fn get_most_recent_backup(path_to_backup_dir: &PathBuf) -> PathBuf{
 	//get the paths to the backups in the backup directory
 	let mut path_to_backups = get_files_in_dir(path_to_backup_dir);
