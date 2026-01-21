@@ -96,17 +96,11 @@ fn iterative_backup(
 	dims: &Vec<PathBuf>,
 	current_time: &String,
 ) -> () {
-	//get the paths to the backups in the backup directory
-	let mut path_to_backups = get_files_in_dir(path_to_backup_dir);
-
-	//find most recent backup by sorting, reversing, and getting the first element
-	path_to_backups.sort();
-	path_to_backups.reverse();
-	let path_to_most_recent_backup = path_to_backups.get(0).expect("backup dir empty");
+	let path_to_most_recent_backup = get_most_recent_backup(&path_to_backup_dir);
 
 	//get the timestamp of the backup
 	let most_recent_backup_timestamp =
-		timestamp_as_str_to_OffsetDateTime(get_file_name_as_str(path_to_most_recent_backup));
+		timestamp_as_str_to_OffsetDateTime(get_file_name_as_str(&path_to_most_recent_backup));
 
 	//create directory to store new backup. MUST go after finding the most recent backup because if not the most recent check will fail
 	init_backup_dir(path_to_backup_dir, &dims, &current_time);
@@ -214,7 +208,18 @@ fn restore(
 	path_to_backup_dir: &PathBuf,
 	dims: &Vec<PathBuf>,
 	timestamp: &String,
-) {
+) -> () {
+}
+
+fn get_most_recent_backup(path_to_backup_dir: &PathBuf) -> PathBuf{
+	//get the paths to the backups in the backup directory
+	let mut path_to_backups = get_files_in_dir(path_to_backup_dir);
+
+	//find most recent backup by sorting, reversing, and getting the first element
+	path_to_backups.sort();
+	path_to_backups.reverse();
+	let path_to_most_recent_backup = path_to_backups.get(0).expect("backup dir empty").to_owned();
+	return path_to_most_recent_backup;
 }
 
 fn init_backup_dir(path_to_backup_dir: &PathBuf, dims: &Vec<PathBuf>, current_time: &String) -> () {
