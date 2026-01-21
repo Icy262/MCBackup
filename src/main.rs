@@ -207,6 +207,23 @@ fn restore(
 	dims: &Vec<PathBuf>,
 	timestamp: &String,
 ) -> () {
+	let path_to_backup = path_to_backup_generator(path_to_backup_dir, timestamp);
+
+	for dim in dims {
+		//remove the dir and recreate it to remove the contents
+		fs::remove_dir_all(dim).expect("Should be able to delete world dim dir");
+		fs::create_dir(dim).expect("Should be able to create world dim dir");
+
+		//copy all files from the backup dir
+		copy_entire_dir(&path_to_backup, &path_to_world.join(dim.file_name().expect("Should be able to read dim name")));
+
+		//read and delete manifest
+		let path_to_manifest = &path_to_backup.join(dim).join("manifest.csv");
+		let manifest_files = read_manifest(path_to_manifest);
+		fs::remove_file(path_to_manifest);
+
+		//resolve all regions from manifest
+	}
 }
 
 fn path_to_backup_generator(path_to_backup_dir: &PathBuf, timestamp: &String) -> PathBuf {
