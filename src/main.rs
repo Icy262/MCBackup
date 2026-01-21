@@ -2,6 +2,7 @@ use clap::Parser;
 use clap::Subcommand;
 use std::fs;
 use std::fs::OpenOptions;
+use std::io::Read;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use time::OffsetDateTime;
@@ -171,17 +172,14 @@ fn iterative_backup(
 							.expect("failed to write to csv");
 					} else if let Some(path) =
 						//check previous backup manifest for the region
-						fs::read_to_string(
-							path_to_most_recent_backup.join(dim).join("manifest.csv"),
-						)
-						.expect("most recent backup manifest read failed")
-						.split(",")
-						.find(|item| item.contains(get_file_name_as_str(&region_file)))
+						read_manifest(&path_to_most_recent_backup.join(dim).join("manifest.txt"))
+						.into_iter()
+						.find(|item| get_file_name_as_str(item) == get_file_name_as_str(&region_file))
 					{
 						//found the path in the old manifest
 						//write the path we found to the new manifest
 						csv_writer
-							.write_all(format!("{},", path).as_bytes())
+							.write_all(format!("{},", path.to_str().expect("Should be able convert path to str")).as_bytes())
 							.expect("could not write to manifest");
 					} else {
 						//something screwy is going on. copy the file and move on
@@ -285,7 +283,7 @@ fn copy_entire_dir(path_to_src_dir: &PathBuf, path_to_dest_dir: &PathBuf) -> () 
 
 	//for each region,
 	for file in files {
-		//copy the rfileegion from the source dir to the destination dir
+		//copy the file from the source dir to the destination dir
 		fs::copy(
 			&file,
 			&path_to_dest_dir.join(file.file_name().expect("File name should be readable")),
@@ -307,4 +305,12 @@ fn timestamp_as_str_to_OffsetDateTime(timestamp: &str) -> OffsetDateTime {
 	PrimitiveDateTime::parse(timestamp, &FORMAT)
 		.expect("Should be able to parse timestamp")
 		.assume_offset(UtcOffset::current_local_offset().expect("Should be able to get time zone"))
+}
+
+fn read_manifest(path_to_manifest: &PathBuf) -> Vec<PathBuf> {
+	fs::read_to_string(path_to_manifest)
+		.expect("most recent backup manifest read failed")
+		.split(",")
+		.map(|str| PathBuf::from(str))
+		.collect::<Vec<PathBuf>>()
 }
