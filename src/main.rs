@@ -4,12 +4,6 @@ use std::fs;
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
-use time::OffsetDateTime;
-use time::macros::format_description;
-use time::{PrimitiveDateTime, UtcOffset};
-
-const FORMAT: &[time::format_description::FormatItem<'static>] =
-	format_description!("[year]-[month]-[day]T[hour]-[minute]");
 
 //Iterative backup tool for Minecraft
 #[derive(Parser)]
@@ -51,12 +45,12 @@ fn main() {
 	//let backup_frequency; //add flag to force backup
 
 	//set directory timestamp
-	let current_time = current_time_as_string();
+	let current_time = timestamp::current_time();
 
 	match args.mode {
 		Mode::Backup { backup_mode } => {
 			//check if the backup is already up to date
-			if get_most_recent_backup(&path_to_backup_dir).is_some_and(|most_recent_backup| {
+			if backup::get_most_recent(&path_to_backup_dir).is_some_and(|most_recent_backup| {
 				get_file_name_as_str(&most_recent_backup) == current_time
 			}) {
 				//if there is a most recent backup and it is the current time,
@@ -64,7 +58,7 @@ fn main() {
 				return; //return
 			}
 
-			if backup_mode.as_str() == "iterative" && prev_backup_exists(&path_to_backup_dir) {
+			if backup_mode.as_str() == "iterative" && backup::prev_exists(&path_to_backup_dir) {
 				//if there are previous backups and backup mode iterative specified,
 				iterative_backup(&path_to_world, &path_to_backup_dir, &dims, &current_time); //perform iterative backup
 			} else {
@@ -85,7 +79,7 @@ fn full_backup(
 	current_time: &String,
 ) -> () {
 	//create directory to store new backup
-	init_backup_dir(&path_to_backup_dir, &dims, &current_time);
+	backup::init(&path_to_backup_dir, &dims, &current_time);
 
 	//for each dimension to backup,
 	for dim in dims {
@@ -95,7 +89,7 @@ fn full_backup(
 		//generate the path to this dim's regions
 		let path_to_regions = path_to_world.join(dim);
 
-		copy_entire_dir(&path_to_regions, &path_to_dim_backup);
+		dir_operation::copy(&path_to_regions, &path_to_dim_backup);
 	}
 }
 
@@ -105,15 +99,15 @@ fn iterative_backup(
 	dims: &Vec<PathBuf>,
 	current_time: &String,
 ) -> () {
-	let path_to_most_recent_backup = get_most_recent_backup(&path_to_backup_dir)
+	let path_to_most_recent_backup = backup::get_most_recent(&path_to_backup_dir)
 		.expect("Should be at least one backup in the backup dir");
 
 	//get the timestamp of the backup
 	let most_recent_backup_timestamp =
-		timestamp_as_str_to_OffsetDateTime(get_file_name_as_str(&path_to_most_recent_backup));
+		timestamp::to_OffsetDateTime(get_file_name_as_str(&path_to_most_recent_backup));
 
 	//create directory to store new backup. MUST go after finding the most recent backup because if not the most recent check will fail
-	init_backup_dir(path_to_backup_dir, &dims, &current_time);
+	backup::init(path_to_backup_dir, &dims, &current_time);
 
 	//for each dimension,
 	for dim in dims {
@@ -121,7 +115,7 @@ fn iterative_backup(
 		let path_to_dim_backup = path_to_backup_dir.join(&current_time).join(dim);
 
 		//get the path to the region files for this dimension
-		let region_files = get_files_in_dir(&path_to_world.join(dim));
+		let region_files = dir_operation::get_files(&path_to_world.join(dim));
 
 		//create writer to manifest csv
 		let mut csv_writer = BufWriter::new(
@@ -134,7 +128,7 @@ fn iterative_backup(
 		//for each region file,
 		for region_file in region_files {
 			//get the timestamp of the region's last modification
-			let modified_timestamp = get_file_timestamp(&region_file);
+			let modified_timestamp = timestamp::get_timestamp(&region_file);
 
 			//compare last modification timestamp to last backup timestamp to determine if a new copy needs to be taken
 			match modified_timestamp >= most_recent_backup_timestamp {
@@ -225,7 +219,7 @@ fn restore(
 	dims: &Vec<PathBuf>,
 	timestamp: &String,
 ) -> () {
-	let path_to_backup = path_to_backup_generator(path_to_backup_dir, timestamp);
+	let path_to_backup = backup::path_generator(path_to_backup_dir, timestamp);
 
 	for dim in dims {
 		let path_to_backup_dim = path_to_backup.join(dim);
@@ -236,7 +230,7 @@ fn restore(
 		fs::create_dir(&path_to_world_dim).expect("Should be able to create world dim dir");
 
 		//copy all files from the backup dir
-		copy_entire_dir(&path_to_backup_dim, &path_to_world_dim);
+		dir_operation::copy(&path_to_backup_dim, &path_to_world_dim);
 
 		//read and delete manifest
 		let path_to_manifest = &&path_to_world_dim.join("manifest.csv");
@@ -255,112 +249,12 @@ fn restore(
 	}
 }
 
-fn path_to_backup_generator(path_to_backup_dir: &PathBuf, timestamp: &String) -> PathBuf {
-	if timestamp == "recent" {
-		//if most recent backup,
-		//find most recent
-		get_most_recent_backup(path_to_backup_dir)
-			.expect("Should be at least one backup in backup directory to call this function")
-	} else {
-		//find the backup specified,
-		//generate the path
-		path_to_backup_dir.join(timestamp)
-	}
-}
-
-fn get_most_recent_backup(path_to_backup_dir: &PathBuf) -> Option<PathBuf> {
-	//get the paths to the backups in the backup directory
-	let mut path_to_backups = get_files_in_dir(path_to_backup_dir);
-
-	//find most recent backup by sorting, reversing, and getting the first element
-	path_to_backups.sort();
-	path_to_backups.reverse();
-
-	//Return a path to the most recent backup exists, or none
-	if path_to_backups.len() != 0 {
-		//if there are backups in the backup dir,
-		return Some(path_to_backups[0].to_owned());
-	} else {
-		//no backups,
-		return None;
-	}
-}
-
-fn init_backup_dir(path_to_backup_dir: &PathBuf, dims: &Vec<PathBuf>, current_time: &String) -> () {
-	//create directory to store new backup
-	let new_backup_dir = path_to_backup_dir.join(&current_time);
-	fs::create_dir_all(&new_backup_dir).unwrap(); //panic if directory already exists
-
-	for dim in dims.iter() {
-		//create new directory in backup directory to store this dimension
-		fs::create_dir_all(new_backup_dir.join(dim))
-			.expect("failed to create dimension backup directory");
-
-		//init csv
-		fs::File::create(new_backup_dir.join(dim).join("manifest.csv"))
-			.expect("failed to create manifest.csv");
-	}
-}
-
-fn prev_backup_exists(path_to_backup_dir: &PathBuf) -> bool {
-	fs::read_dir(path_to_backup_dir)
-		.expect("backup dir could not be read")
-		.next()
-		.is_some()
-}
-
-fn current_time_as_string() -> String {
-	OffsetDateTime::now_local()
-		.expect("could not get local time")
-		.format(&FORMAT)
-		.expect("could not convert time to String")
-}
-
-fn get_file_timestamp(region_file: &PathBuf) -> OffsetDateTime {
-	OffsetDateTime::from(
-		fs::metadata(&region_file)
-			.expect("failed to read metadata")
-			.modified()
-			.expect("failed to read timestamp"),
-	)
-}
-
-fn get_files_in_dir(path_to_directory: &PathBuf) -> Vec<PathBuf> {
-	//will get the files in the directory
-	fs::read_dir(&path_to_directory)
-		.expect("Directory must be readable")
-		.map(|file| file.expect("File must be readable").path())
-		.collect::<Vec<PathBuf>>()
-}
-
-fn copy_entire_dir(path_to_src_dir: &PathBuf, path_to_dest_dir: &PathBuf) -> () {
-	//get the paths to every file in this dir
-	let files = get_files_in_dir(&path_to_src_dir);
-
-	//for each region,
-	for file in files {
-		//copy the file from the source dir to the destination dir
-		fs::copy(
-			&file,
-			&path_to_dest_dir.join(file.file_name().expect("File name should be readable")),
-		)
-		.expect("Copy should be copyable");
-	}
-}
-
 fn get_file_name_as_str(path_to_file: &PathBuf) -> &str {
 	path_to_file
 		.file_name()
 		.expect("Should be able to get the file name of the file referenced in the path")
 		.to_str()
 		.expect("Should be able to convert OsString to String")
-}
-
-#[allow(non_snake_case)]
-fn timestamp_as_str_to_OffsetDateTime(timestamp: &str) -> OffsetDateTime {
-	PrimitiveDateTime::parse(timestamp, &FORMAT)
-		.expect("Should be able to parse timestamp")
-		.assume_offset(UtcOffset::current_local_offset().expect("Should be able to get time zone"))
 }
 
 fn read_manifest(path_to_manifest: &PathBuf) -> Vec<PathBuf> {
@@ -370,4 +264,127 @@ fn read_manifest(path_to_manifest: &PathBuf) -> Vec<PathBuf> {
 		.map(|str| PathBuf::from(str))
 		.filter(|item| item != "") //remove empty items
 		.collect::<Vec<PathBuf>>()
+}
+
+mod timestamp {
+	use time::OffsetDateTime;
+	use time::PrimitiveDateTime;
+	use time::UtcOffset;
+	use time::macros::format_description;
+	use std::path::PathBuf;
+	use std::fs;
+
+	const FORMAT: &[time::format_description::FormatItem<'static>] =
+	format_description!("[year]-[month]-[day]T[hour]-[minute]");
+
+	#[allow(non_snake_case)]
+	pub(crate) fn to_OffsetDateTime(timestamp: &str) -> OffsetDateTime {
+		PrimitiveDateTime::parse(timestamp, &FORMAT)
+			.expect("Should be able to parse timestamp")
+			.assume_offset(UtcOffset::current_local_offset().expect("Should be able to get time zone"))
+	}
+
+	pub(crate) fn get_timestamp(file: &PathBuf) -> OffsetDateTime {
+		OffsetDateTime::from(
+			fs::metadata(&file)
+				.expect("failed to read metadata")
+				.modified()
+				.expect("failed to read timestamp"),
+		)
+	}
+
+	pub(crate) fn current_time() -> String {
+		OffsetDateTime::now_local()
+			.expect("could not get local time")
+			.format(&FORMAT)
+			.expect("could not convert time to String")
+	}
+}
+
+mod dir_operation {
+	use std::path::PathBuf;
+	use std::fs;
+
+	pub(crate) fn copy(path_to_src_dir: &PathBuf, path_to_dest_dir: &PathBuf) -> () {
+		//get the paths to every file in this dir
+		let files = get_files(&path_to_src_dir);
+
+		//for each file,
+		for file in files {
+			//copy the file from the source dir to the destination dir
+			fs::copy(
+				&file,
+				&path_to_dest_dir.join(file.file_name().expect("File name should be readable")),
+			)
+			.expect("Copy should be copyable");
+		}
+	}
+
+	pub(crate) fn get_files(path_to_directory: &PathBuf) -> Vec<PathBuf> {
+		//will get the files in the directory
+		fs::read_dir(&path_to_directory)
+			.expect("Directory must be readable")
+			.map(|file| file.expect("File must be readable").path())
+			.collect::<Vec<PathBuf>>()
+	}
+}
+
+mod backup {
+	use std::path::PathBuf;
+	use std::fs;
+	use crate::dir_operation;
+
+	pub(crate) fn path_generator(path_to_backup_dir: &PathBuf, timestamp: &String) -> PathBuf {
+		if timestamp == "recent" {
+			//if most recent backup,
+			//find most recent
+			get_most_recent(path_to_backup_dir)
+				.expect("Should be at least one backup in backup directory to call this function")
+		} else {
+			//find the backup specified,
+			//generate the path
+			path_to_backup_dir.join(timestamp)
+		}
+	}
+
+	pub(crate) fn get_most_recent(path_to_backup_dir: &PathBuf) -> Option<PathBuf> {
+		//get the paths to the backups in the backup directory
+		let mut path_to_backups = dir_operation::get_files(path_to_backup_dir);
+
+		//find most recent backup by sorting, reversing, and getting the first element
+		path_to_backups.sort();
+		path_to_backups.reverse();
+
+		//Return a path to the most recent backup exists, or none
+		if path_to_backups.len() != 0 {
+			//if there are backups in the backup dir,
+			return Some(path_to_backups[0].to_owned());
+		} else {
+			//no backups,
+			return None;
+		}
+	}
+
+	pub(crate) fn init(path_to_backup_dir: &PathBuf, dims: &Vec<PathBuf>, current_time: &String) -> () {
+		//create directory to store new backup
+		let new_backup_dir = path_to_backup_dir.join(&current_time);
+		fs::create_dir_all(&new_backup_dir).unwrap(); //panic if directory already exists
+
+		for dim in dims.iter() {
+			//create new directory in backup directory to store this dimension
+			fs::create_dir_all(new_backup_dir.join(dim))
+				.expect("failed to create dimension backup directory");
+
+			//init csv
+			fs::File::create(new_backup_dir.join(dim).join("manifest.csv"))
+				.expect("failed to create manifest.csv");
+		}
+	}
+
+	pub(crate) fn prev_exists(path_to_backup_dir: &PathBuf) -> bool {
+		fs::read_dir(path_to_backup_dir)
+			.expect("backup dir could not be read")
+			.next()
+			.is_some()
+	}
 }
