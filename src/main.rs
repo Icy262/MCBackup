@@ -56,7 +56,10 @@ fn main() {
 	match args.mode {
 		Mode::Backup { backup_mode } => {
 			//check if the backup is already up to date
-			if get_most_recent_backup(&path_to_backup_dir).is_some_and(|most_recent_backup| get_file_name_as_str(&most_recent_backup) == current_time) { //if there is a most recent backup and it is the current time,
+			if get_most_recent_backup(&path_to_backup_dir).is_some_and(|most_recent_backup| {
+				get_file_name_as_str(&most_recent_backup) == current_time
+			}) {
+				//if there is a most recent backup and it is the current time,
 				println!("Backup already up to date"); //notify user
 				return; //return
 			}
@@ -102,7 +105,8 @@ fn iterative_backup(
 	dims: &Vec<PathBuf>,
 	current_time: &String,
 ) -> () {
-	let path_to_most_recent_backup = get_most_recent_backup(&path_to_backup_dir).expect("Should be at least one backup in the backup dir");
+	let path_to_most_recent_backup = get_most_recent_backup(&path_to_backup_dir)
+		.expect("Should be at least one backup in the backup dir");
 
 	//get the timestamp of the backup
 	let most_recent_backup_timestamp =
@@ -177,14 +181,23 @@ fn iterative_backup(
 							.expect("failed to write to csv");
 					} else if let Some(path) =
 						//check previous backup manifest for the region
-						read_manifest(&path_to_most_recent_backup.join(dim).join("manifest.csv"))
+						read_manifest(
+							&path_to_most_recent_backup.join(dim).join("manifest.csv"),
+						)
 						.into_iter()
-						.find(|item| get_file_name_as_str(item) == get_file_name_as_str(&region_file))
-					{
+						.find(|item| {
+							get_file_name_as_str(item) == get_file_name_as_str(&region_file)
+						}) {
 						//found the path in the old manifest
 						//write the path we found to the new manifest
 						csv_writer
-							.write_all(format!("{},", path.to_str().expect("Should be able convert path to str")).as_bytes())
+							.write_all(
+								format!(
+									"{},",
+									path.to_str().expect("Should be able convert path to str")
+								)
+								.as_bytes(),
+							)
 							.expect("could not write to manifest");
 					} else {
 						//something screwy is going on. copy the file and move on
@@ -232,16 +245,24 @@ fn restore(
 
 		//resolve all regions from manifest
 		for region in regions {
-			fs::copy(&region, &path_to_world_dim.join(&region.file_name().expect("Should be able to get file name"))).expect("Should be able to copy region to world dim");
+			fs::copy(
+				&region,
+				&path_to_world_dim
+					.join(&region.file_name().expect("Should be able to get file name")),
+			)
+			.expect("Should be able to copy region to world dim");
 		}
 	}
 }
 
 fn path_to_backup_generator(path_to_backup_dir: &PathBuf, timestamp: &String) -> PathBuf {
-	if timestamp == "recent" { //if most recent backup,
+	if timestamp == "recent" {
+		//if most recent backup,
 		//find most recent
-		get_most_recent_backup(path_to_backup_dir).expect("Should be at least one backup in backup directory to call this function")
-	} else { //find the backup specified,
+		get_most_recent_backup(path_to_backup_dir)
+			.expect("Should be at least one backup in backup directory to call this function")
+	} else {
+		//find the backup specified,
 		//generate the path
 		path_to_backup_dir.join(timestamp)
 	}
@@ -256,10 +277,12 @@ fn get_most_recent_backup(path_to_backup_dir: &PathBuf) -> Option<PathBuf> {
 	path_to_backups.reverse();
 
 	//Return a path to the most recent backup exists, or none
-	if path_to_backups.len() != 0 { //if there are backups in the backup dir,
+	if path_to_backups.len() != 0 {
+		//if there are backups in the backup dir,
 		return Some(path_to_backups[0].to_owned());
-	} else { //no backups,
-		 return None;
+	} else {
+		//no backups,
+		return None;
 	}
 }
 
