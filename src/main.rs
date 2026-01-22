@@ -223,16 +223,16 @@ fn restore(
 		fs::create_dir(&path_to_world_dim).expect("Should be able to create world dim dir");
 
 		//copy all files from the backup dir
-		copy_entire_dir(&path_to_backup, &path_to_world_dim);
+		copy_entire_dir(&path_to_backup_dim, &path_to_world_dim);
 
 		//read and delete manifest
-		let path_to_manifest = &path_to_backup_dim.join("manifest.csv");
+		let path_to_manifest = &&path_to_world_dim.join("manifest.csv");
 		let regions = read_manifest(&path_to_manifest);
 		fs::remove_file(path_to_manifest).expect("Should be able to delete manifest");
 
 		//resolve all regions from manifest
 		for region in regions {
-			fs::copy(region, &path_to_world_dim).expect("Should be able to copy region to world dim");
+			fs::copy(&region, &path_to_world_dim.join(&region.file_name().expect("Should be able to get file name"))).expect("Should be able to copy region to world dim");
 		}
 	}
 }
