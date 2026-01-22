@@ -210,21 +210,24 @@ fn restore(
 	let path_to_backup = path_to_backup_generator(path_to_backup_dir, timestamp);
 
 	for dim in dims {
+		let path_to_backup_dim = path_to_backup.join(dim);
+		let path_to_world_dim = path_to_world.join(dim);
+
 		//remove the dir and recreate it to remove the contents
-		fs::remove_dir_all(dim).expect("Should be able to delete world dim dir");
-		fs::create_dir(dim).expect("Should be able to create world dim dir");
+		fs::remove_dir_all(&path_to_world_dim).expect("Should be able to delete world dim dir");
+		fs::create_dir(&path_to_world_dim).expect("Should be able to create world dim dir");
 
 		//copy all files from the backup dir
-		copy_entire_dir(&path_to_backup, &path_to_world.join(dim.file_name().expect("Should be able to read dim name")));
+		copy_entire_dir(&path_to_backup, &path_to_world_dim);
 
 		//read and delete manifest
-		let path_to_manifest = &path_to_backup.join(dim).join("manifest.csv");
-		let regions = read_manifest(path_to_manifest);
+		let path_to_manifest = &path_to_backup_dim.join("manifest.csv");
+		let regions = read_manifest(&path_to_manifest);
 		fs::remove_file(path_to_manifest).expect("Should be able to delete manifest");
 
 		//resolve all regions from manifest
 		for region in regions {
-			fs::copy(region, dim).expect("Should be able to copy region to world dim");
+			fs::copy(region, &path_to_world_dim).expect("Should be able to copy region to world dim");
 		}
 	}
 }
@@ -239,7 +242,7 @@ fn path_to_backup_generator(path_to_backup_dir: &PathBuf, timestamp: &String) ->
 	}
 }
 
-fn get_most_recent_backup(path_to_backup_dir: &PathBuf) -> PathBuf{
+fn get_most_recent_backup(path_to_backup_dir: &PathBuf) -> PathBuf {
 	//get the paths to the backups in the backup directory
 	let mut path_to_backups = get_files_in_dir(path_to_backup_dir);
 
