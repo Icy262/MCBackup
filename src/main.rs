@@ -2,8 +2,8 @@ use clap::Parser;
 use clap::Subcommand;
 use std::fs;
 use std::fs::OpenOptions;
-use std::io::Read;
 use std::io::{BufWriter, Write};
+use std::path;
 use std::path::PathBuf;
 use time::OffsetDateTime;
 use time::macros::format_description;
@@ -172,7 +172,7 @@ fn iterative_backup(
 							.expect("failed to write to csv");
 					} else if let Some(path) =
 						//check previous backup manifest for the region
-						read_manifest(&path_to_most_recent_backup.join(dim).join("manifest.txt"))
+						read_manifest(&path_to_most_recent_backup.join(dim).join("manifest.csv"))
 						.into_iter()
 						.find(|item| get_file_name_as_str(item) == get_file_name_as_str(&region_file))
 					{
@@ -219,10 +219,13 @@ fn restore(
 
 		//read and delete manifest
 		let path_to_manifest = &path_to_backup.join(dim).join("manifest.csv");
-		let manifest_files = read_manifest(path_to_manifest);
-		fs::remove_file(path_to_manifest);
+		let regions = read_manifest(path_to_manifest);
+		fs::remove_file(path_to_manifest).expect("Should be able to delete manifest");
 
 		//resolve all regions from manifest
+		for region in regions {
+			fs::copy(region, dim).expect("Should be able to copy region to world dim");
+		}
 	}
 }
 
@@ -329,5 +332,6 @@ fn read_manifest(path_to_manifest: &PathBuf) -> Vec<PathBuf> {
 		.expect("most recent backup manifest read failed")
 		.split(",")
 		.map(|str| PathBuf::from(str))
+		.filter(|item| item != "") //remove empty items
 		.collect::<Vec<PathBuf>>()
 }
