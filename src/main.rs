@@ -4,6 +4,7 @@ use std::fs;
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
+use clap::ValueEnum;
 
 //Iterative backup tool for Minecraft
 #[derive(Parser)]
@@ -19,8 +20,8 @@ enum Mode {
 	//create a backup
 	Backup {
 		//full or iterative backup
-		#[arg(default_value = "iterative")]
-		backup_mode: String,
+		#[arg(value_enum, default_value_t = BackupMode::Iterative)]
+		backup_mode: BackupMode,
 	},
 
 	//restore from a backup
@@ -29,6 +30,12 @@ enum Mode {
 		#[arg(default_value = "recent")]
 		restore_from: String,
 	},
+}
+
+#[derive(Clone, ValueEnum, PartialEq, Eq)]
+enum BackupMode {
+	Full,
+	Iterative,
 }
 
 fn main() {
@@ -58,7 +65,7 @@ fn main() {
 				return; //return
 			}
 
-			if backup_mode.as_str() == "iterative" && backup::prev_exists(&path_to_backup_dir) {
+			if backup_mode == BackupMode::Iterative && backup::prev_exists(&path_to_backup_dir) {
 				//if there are previous backups and backup mode iterative specified,
 				iterative_backup(&path_to_world, &path_to_backup_dir, &dims, &current_time); //perform iterative backup
 			} else {
