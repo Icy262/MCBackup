@@ -3,7 +3,6 @@ use clap::Subcommand;
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
-use std::path;
 use std::path::PathBuf;
 use time::OffsetDateTime;
 use time::macros::format_description;
@@ -56,6 +55,12 @@ fn main() {
 
 	match args.mode {
 		Mode::Backup { backup_mode } => {
+			//check if the backup is already up to date
+			if get_most_recent_backup(&path_to_backup_dir).is_some_and(|most_recent_backup| get_file_name_as_str(&most_recent_backup) == current_time) { //if there is a most recent backup and it is the current time,
+				println!("Backup already up to date"); //notify user
+				return; //return
+			}
+
 			if backup_mode.as_str() == "iterative" && prev_backup_exists(&path_to_backup_dir) {
 				//if there are previous backups and backup mode iterative specified,
 				iterative_backup(&path_to_world, &path_to_backup_dir, &dims, &current_time); //perform iterative backup
@@ -97,7 +102,7 @@ fn iterative_backup(
 	dims: &Vec<PathBuf>,
 	current_time: &String,
 ) -> () {
-	let path_to_most_recent_backup = get_most_recent_backup(&path_to_backup_dir);
+	let path_to_most_recent_backup = get_most_recent_backup(&path_to_backup_dir).expect("Should be at least one backup in the backup dir");
 
 	//get the timestamp of the backup
 	let most_recent_backup_timestamp =
@@ -235,22 +240,27 @@ fn restore(
 fn path_to_backup_generator(path_to_backup_dir: &PathBuf, timestamp: &String) -> PathBuf {
 	if timestamp == "recent" { //if most recent backup,
 		//find most recent
-		get_most_recent_backup(path_to_backup_dir)
+		get_most_recent_backup(path_to_backup_dir).expect("Should be at least one backup in backup directory to call this function")
 	} else { //find the backup specified,
 		//generate the path
 		path_to_backup_dir.join(timestamp)
 	}
 }
 
-fn get_most_recent_backup(path_to_backup_dir: &PathBuf) -> PathBuf {
+fn get_most_recent_backup(path_to_backup_dir: &PathBuf) -> Option<PathBuf> {
 	//get the paths to the backups in the backup directory
 	let mut path_to_backups = get_files_in_dir(path_to_backup_dir);
 
 	//find most recent backup by sorting, reversing, and getting the first element
 	path_to_backups.sort();
 	path_to_backups.reverse();
-	let path_to_most_recent_backup = path_to_backups.get(0).expect("backup dir empty").to_owned();
-	return path_to_most_recent_backup;
+
+	//Return a path to the most recent backup exists, or none
+	if path_to_backups.len() != 0 { //if there are backups in the backup dir,
+		return Some(path_to_backups[0].to_owned());
+	} else { //no backups,
+		 return None;
+	}
 }
 
 fn init_backup_dir(path_to_backup_dir: &PathBuf, dims: &Vec<PathBuf>, current_time: &String) -> () {
