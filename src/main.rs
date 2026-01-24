@@ -309,7 +309,7 @@ mod timestamp {
 }
 
 mod dir_operation {
-	use std::path::PathBuf;
+	use std::path::{self, PathBuf};
 	use std::fs;
 
 	pub(crate) fn copy(path_to_src_dir: &PathBuf, path_to_dest_dir: &PathBuf) -> () {
@@ -333,6 +333,20 @@ mod dir_operation {
 			.expect("Directory must be readable")
 			.map(|file| file.expect("File must be readable").path())
 			.collect::<Vec<PathBuf>>()
+	}
+
+	pub(crate) fn get_files_recursive(path_to_directory: &PathBuf) -> Vec<PathBuf> {
+		if path_to_directory.is_dir() { //if path is to dir,
+			let mut files = vec![];
+
+			for file in get_files(&path_to_directory) { //for each file,
+				files.append(&mut get_files_recursive(&file)); //get the files it contains and append
+			}
+
+			return files;
+		} else { //path is to file,
+			return vec![path_to_directory.to_path_buf()];
+		}
 	}
 }
 
