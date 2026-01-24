@@ -3,9 +3,10 @@ use clap::Subcommand;
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
-use std::path::Path;
 use std::path::PathBuf;
 use clap::ValueEnum;
+
+use crate::dir_operation::get_files_recursive;
 
 //Iterative backup tool for Minecraft
 #[derive(Parser)]
@@ -45,12 +46,6 @@ fn main() {
 	//temp, will be moved to config later
 	let path_to_world = PathBuf::from("testworld");
 	let path_to_backup_dir = PathBuf::from("testbackup");
-	let dims = vec![
-		PathBuf::from("region"),
-		PathBuf::from("DIM1/region"),
-		PathBuf::from("DIM-1/region"),
-	]; //vanilla minecraft uses these three directories. add support for additional directories for modded worlds
-	//let backup_frequency; //add flag to force backup
 
 	//set directory timestamp
 	let current_time = timestamp::current_time();
@@ -68,192 +63,175 @@ fn main() {
 
 			if backup_mode == BackupMode::Iterative && backup::prev_exists(&path_to_backup_dir) {
 				//if there are previous backups and backup mode iterative specified,
-				iterative_backup(&path_to_world, &path_to_backup_dir, &dims, &current_time); //perform iterative backup
+				iterative_backup(&path_to_world, &path_to_backup_dir, &current_time); //perform iterative backup
 			} else {
 				//no previous backups or backup mode full specified,
-				full_backup(&path_to_world, &path_to_backup_dir, &dims, &current_time); //perform a full backup
+				full_backup(&path_to_world, &path_to_backup_dir, &current_time); //perform a full backup
 			}
 		}
 		Mode::Restore { restore_from } => {
-			restore(&path_to_world, &path_to_backup_dir, &dims, &restore_from);
+			restore(&path_to_world, &path_to_backup_dir,&restore_from);
 		}
 	}
 }
 
 fn full_backup(
 	path_to_world: &PathBuf,
-	path_to_backup_dir: &PathBuf,
-	dims: &Vec<PathBuf>,
+	path_to_backups_dir: &PathBuf,
 	current_time: &String,
 ) -> () {
+	//get vec of paths to all files to backup
+	let files = get_files_recursive(path_to_world);
+
+	let world_path_cannonicalized = path_to_world.canonicalize().expect("Should be able to cannonicalize path to world");
+
+	let path_to_backup_dir = path_to_backups_dir.join(current_time);
+
 	//create directory to store new backup
-	backup::init(&path_to_backup_dir, &dims, &current_time);
+	backup::init(&path_to_backup_dir, &files.iter().map(|file| trim_path(&file, &world_path_cannonicalized)).collect::<Vec<PathBuf>>());
 
-	//for each dimension to backup,
-	for dim in dims {
-		//generate the path to the backup dir for this dim's regions
-		let path_to_dim_backup = path_to_backup_dir.join(&current_time).join(dim);
+	let path_to_backup_dir = path_to_backups_dir.join(current_time); //path to the directory we are actually backing up to
 
-		//generate the path to this dim's regions
-		let path_to_regions = path_to_world.join(dim);
-
-		dir_operation::copy(&path_to_regions, &path_to_dim_backup);
+	for file in files { //for each file to backup,
+		fs::copy(&file, &path_to_backup_dir.join(trim_path(&file, &world_path_cannonicalized))).expect("Should be able to copy file");
 	}
 }
 
 fn iterative_backup(
 	path_to_world: &PathBuf,
-	path_to_backup_dir: &PathBuf,
-	dims: &Vec<PathBuf>,
+	path_to_backups_dir: &PathBuf,
 	current_time: &String,
 ) -> () {
-	let path_to_most_recent_backup = backup::get_most_recent(&path_to_backup_dir)
+	let path_to_backup = path_to_backups_dir.join(current_time);
+
+	let path_to_most_recent_backup = backup::get_most_recent(&path_to_backups_dir)
 		.expect("Should be at least one backup in the backup dir");
 
 	//get the timestamp of the backup
 	let most_recent_backup_timestamp =
 		timestamp::to_OffsetDateTime(get_file_name_as_str(&path_to_most_recent_backup));
 
+	let files = get_files_recursive(&path_to_world); //get the paths of every file to backup
+
 	//create directory to store new backup. MUST go after finding the most recent backup because if not the most recent check will fail
-	backup::init(path_to_backup_dir, &dims, &current_time);
+	backup::init(&path_to_backup, &files.iter().map(|file| trim_path(&file, &path_to_world.canonicalize().expect("Should be able to cannonicalize the world path"))).collect::<Vec<PathBuf>>());
 
-	//for each dimension,
-	for dim in dims {
-		//generate the path to this dim's backup
-		let path_to_dim_backup = path_to_backup_dir.join(&current_time).join(dim);
+	//create writer to new manifest csv
+	let mut csv_writer = BufWriter::new(
+		OpenOptions::new()
+			.create(true)
+			.write(true)
+			.open(path_to_backup.join("manifest.csv"))
+			.expect("Should be able to open the manifest"),
+	);
 
-		//get the path to the region files for this dimension
-		let region_files = dir_operation::get_files(&path_to_world.join(dim));
 
-		//create writer to manifest csv
-		let mut csv_writer = BufWriter::new(
-			OpenOptions::new()
-				.append(true)
-				.open(path_to_dim_backup.join("manifest.csv"))
-				.expect("failed to create manifest.csv"),
-		);
+	let path_to_world_cannonicalized = path_to_world.canonicalize().expect("Should be able to cannonicalize path to world");
 
-		//for each region file,
-		for region_file in region_files {
-			//get the timestamp of the region's last modification
-			let modified_timestamp = timestamp::get_timestamp(&region_file);
+	for file in files { //for each file,
+		//get the timestamp of the file's last modification
+		let modified_timestamp = timestamp::get_timestamp(&file);
 
-			//compare last modification timestamp to last backup timestamp to determine if a new copy needs to be taken
-			match modified_timestamp >= most_recent_backup_timestamp {
-				true => {
-					//has been modified since last backup, needs to be updated
+		let trimmed_file_path = trim_path(&file, &path_to_world_cannonicalized);
+
+		//compare last modification timestamp to last backup timestamp to determine if a new copy needs to be taken
+		match modified_timestamp >= most_recent_backup_timestamp {
+			true => {
+				//has been modified since last backup, needs to be updated
+				fs::copy(
+					&file,
+					path_to_backup.join(
+						trimmed_file_path
+					),
+				)
+				.expect("Should be able to copy files from world");
+			}
+			false => {
+				//hasn't been modified since last backup, insert path to older backup of the file in csv
+				//check previous backup directory for the file
+				if path_to_most_recent_backup.join(&trimmed_file_path).exists() {
+					//previous backup has the file, so put a reference to it
+					csv_writer
+						.write_all(
+							format!(
+								"{},",
+								PathBuf::from(get_file_name_as_str(&path_to_most_recent_backup))
+									.join(&trimmed_file_path)
+									.to_str()
+									.expect("Should be able to convert path to str")
+							)
+							.as_bytes(),
+						)
+						.expect("Should be able to write to manifest");
+				} else if let Some(path) =
+					//check previous backup manifest for the file
+					read_manifest(&path_to_most_recent_backup)
+					.into_iter()
+					.find(|item| {
+						get_file_name_as_str(item) == get_file_name_as_str(&trimmed_file_path) //TODO: Could cause issues if two files have same name. Resolve later
+					}) {
+					//found the path in the old manifest
+					//write the path we found to the new manifest
+					csv_writer
+						.write_all(
+							format!(
+								"{},",
+								path.to_str().expect("Should be able convert path to str")
+							)
+							.as_bytes(),
+						)
+						.expect("could not write to manifest");
+				} else {
+					//something screwy is going on. copy the file and move on
+					println!("unexpected error, copied and continued");
 					fs::copy(
-						&region_file,
-						&path_to_dim_backup.join(
-							&region_file
-								.file_name()
-								.expect("could not convert file name to os str"),
-						),
+						file,
+						path_to_backup.join(&trimmed_file_path)
 					)
-					.expect("copying region file failed");
-				}
-				false => {
-					//hasn't been modified since last backup, insert path to older backup of the region in csv
-					//check previous backup directory for the region
-					if fs::read_dir(&path_to_most_recent_backup.join(&dim))
-						.expect("could not read most recent backup")
-						.any(|dir_entry| {
-							dir_entry.expect("backup inacessible").file_name()
-								== region_file
-									.file_name()
-									.expect("file name to os str conversion failed")
-						}) {
-						//previous backup has the region, so put a reference to it
-						csv_writer
-							.write_all(
-								format!(
-									"{},",
-									path_to_most_recent_backup
-										.join(dim)
-										.join(
-											region_file
-												.file_name()
-												.expect("could not get file name")
-										)
-										.to_str()
-										.expect("failed to convert path to str")
-								)
-								.as_bytes(),
-							)
-							.expect("failed to write to csv");
-					} else if let Some(path) =
-						//check previous backup manifest for the region
-						read_manifest(
-							&path_to_most_recent_backup.join(dim).join("manifest.csv"),
-						)
-						.into_iter()
-						.find(|item| {
-							get_file_name_as_str(item) == get_file_name_as_str(&region_file)
-						}) {
-						//found the path in the old manifest
-						//write the path we found to the new manifest
-						csv_writer
-							.write_all(
-								format!(
-									"{},",
-									path.to_str().expect("Should be able convert path to str")
-								)
-								.as_bytes(),
-							)
-							.expect("could not write to manifest");
-					} else {
-						//something screwy is going on. copy the file and move on
-						println!("unexpected error, copied and continued");
-						fs::copy(
-							&region_file,
-							&path_to_dim_backup.join(
-								&region_file
-									.file_name()
-									.expect("could not convert file name to os str"),
-							),
-						)
-						.expect("copying region file failed");
-					}
+					.expect("copying file file failed");
 				}
 			}
 		}
-		csv_writer.flush().expect("failed to flush write buffer");
 	}
+	csv_writer.flush().expect("failed to flush write buffer");
 }
 
 fn restore(
 	path_to_world: &PathBuf,
 	path_to_backup_dir: &PathBuf,
-	dims: &Vec<PathBuf>,
 	timestamp: &String,
 ) -> () {
+	//remove the world directory and recreate it to remove the contents
+	fs::remove_dir_all(path_to_world).expect("Should be able to delete world directory");
+	fs::create_dir(path_to_world).expect("Should be able to create world directory");
+
 	let path_to_backup = backup::path_generator(path_to_backup_dir, timestamp);
+	let path_to_backup_canonicalized = path_to_backup.canonicalize().expect("Should be able canonicalize the path to backup");
+	
+	let path_to_backup_dir_canonicalized = path_to_backup_dir.canonicalize().expect("Should be able canonicalize the path to backup");
 
-	for dim in dims {
-		let path_to_backup_dim = path_to_backup.join(dim);
-		let path_to_world_dim = path_to_world.join(dim);
+	//get the paths of every file in the backup
+	let files = get_files_recursive(&path_to_backup);
+	
+	//init the world directory structure
+	let files_trimmed = files.clone().iter().map(|file| trim_path(file, &path_to_backup_dir_canonicalized).components().skip(1).collect::<PathBuf>()).collect::<Vec<PathBuf>>();
+	backup::init(&path_to_world, &files_trimmed);
 
-		//remove the dir and recreate it to remove the contents
-		fs::remove_dir_all(&path_to_world_dim).expect("Should be able to delete world dim dir");
-		fs::create_dir(&path_to_world_dim).expect("Should be able to create world dim dir");
+	for file in files { //for each file,
+		//copy the file
+		fs::copy(&file, path_to_world.join(trim_path(&file, &path_to_backup_canonicalized))).expect("Should be able to copy file");
+	}
 
-		//copy all files from the backup dir
-		dir_operation::copy(&path_to_backup_dim, &path_to_world_dim);
+	//resolve the files in the manifest
+	let files = read_manifest(&path_to_backup);
+	
+	//init the world directory structure for the manifest files
+	backup::init(&path_to_backup, &files);
 
-		//read and delete manifest
-		let path_to_manifest = &&path_to_world_dim.join("manifest.csv");
-		let regions = read_manifest(&path_to_manifest);
-		fs::remove_file(path_to_manifest).expect("Should be able to delete manifest");
-
-		//resolve all regions from manifest
-		for region in regions {
-			fs::copy(
-				&region,
-				&path_to_world_dim
-					.join(&region.file_name().expect("Should be able to get file name")),
-			)
-			.expect("Should be able to copy region to world dim");
-		}
+	for file in files { //for each file,
+		//copy the file
+		//trim to the start of the backup dir, then remove one more step for timestamp
+		fs::copy(&file, path_to_world.join(trim_path(&file, path_to_backup_dir).components().skip(1).collect::<PathBuf>())).expect("Should be able to copy file");
 	}
 }
 
@@ -266,7 +244,7 @@ fn get_file_name_as_str(path_to_file: &PathBuf) -> &str {
 }
 
 fn read_manifest(path_to_manifest: &PathBuf) -> Vec<PathBuf> {
-	fs::read_to_string(path_to_manifest)
+	fs::read_to_string(path_to_manifest.join("manifest.csv"))
 		.expect("most recent backup manifest read failed")
 		.split(",")
 		.map(|str| PathBuf::from(str))
@@ -274,7 +252,8 @@ fn read_manifest(path_to_manifest: &PathBuf) -> Vec<PathBuf> {
 		.collect::<Vec<PathBuf>>()
 }
 
-fn trim_path(path: &PathBuf, level: &PathBuf) -> PathBuf { //to be faster on batch operations, level should be cannonicalized before passing. Path should actually be below level.
+fn trim_path(path: &PathBuf, level: &PathBuf) -> PathBuf { //to be faster on batch operations, level should be cannonicalized before passing. Path should be a child of level.
+	dbg!(&path);
 	path.canonicalize()
 		.expect("Should be able to cannonicalize path")
 		.strip_prefix(level)
@@ -318,7 +297,7 @@ mod timestamp {
 }
 
 mod dir_operation {
-	use std::path::{self, PathBuf};
+	use std::path::PathBuf;
 	use std::fs;
 
 	pub(crate) fn copy(path_to_src_dir: &PathBuf, path_to_dest_dir: &PathBuf) -> () {
@@ -361,7 +340,7 @@ mod dir_operation {
 
 mod backup {
 	use std::path::PathBuf;
-	use std::fs;
+	use std::fs::{self, create_dir_all};
 	use crate::dir_operation;
 
 	pub(crate) fn path_generator(path_to_backup_dir: &PathBuf, timestamp: &String) -> PathBuf {
@@ -395,20 +374,13 @@ mod backup {
 		}
 	}
 
-	pub(crate) fn init(path_to_backup_dir: &PathBuf, dims: &Vec<PathBuf>, current_time: &String) -> () {
-		//create directory to store new backup
-		let new_backup_dir = path_to_backup_dir.join(&current_time);
-		fs::create_dir_all(&new_backup_dir).unwrap(); //panic if directory already exists
-
-		for dim in dims.iter() {
-			//create new directory in backup directory to store this dimension
-			fs::create_dir_all(new_backup_dir.join(dim))
-				.expect("failed to create dimension backup directory");
-
-			//init csv
-			fs::File::create(new_backup_dir.join(dim).join("manifest.csv"))
-				.expect("failed to create manifest.csv");
+	pub(crate) fn init(path_to_backup: &PathBuf, files: &Vec<PathBuf>) -> () { //file paths should be trimmed to world directory level
+		for file in files { //create a directory for the file
+			create_dir_all(path_to_backup.join(file.parent().expect("File position should have a parent"))).expect("Should be able to create dir");
 		}
+
+		//create a manifest
+		fs::File::create(&path_to_backup.join("manifest.csv")).expect("Should be able to create the manifest");
 	}
 
 	pub(crate) fn prev_exists(path_to_backup_dir: &PathBuf) -> bool {
