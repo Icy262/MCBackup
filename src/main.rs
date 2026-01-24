@@ -3,6 +3,7 @@ use clap::Subcommand;
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
+use std::path::Path;
 use std::path::PathBuf;
 use clap::ValueEnum;
 
@@ -271,6 +272,14 @@ fn read_manifest(path_to_manifest: &PathBuf) -> Vec<PathBuf> {
 		.map(|str| PathBuf::from(str))
 		.filter(|item| item != "") //remove empty items
 		.collect::<Vec<PathBuf>>()
+}
+
+fn trim_path(path: &PathBuf, level: &PathBuf) -> PathBuf { //to be faster on batch operations, level should be cannonicalized before passing. Path should actually be below level.
+	path.canonicalize()
+		.expect("Should be able to cannonicalize path")
+		.strip_prefix(level)
+		.expect("Path should be below level")
+		.to_path_buf()
 }
 
 mod timestamp {
