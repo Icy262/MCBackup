@@ -226,12 +226,13 @@ fn restore(
 	let files = read_manifest(&path_to_backup);
 	
 	//init the world directory structure for the manifest files
-	backup::init(&path_to_backup, &files);
+	let files_trimmed = files.iter().map(|file| file.components().skip(1).collect::<PathBuf>()).collect::<Vec<PathBuf>>();
+	backup::init(&path_to_world, &files_trimmed);
 
 	for file in files { //for each file,
 		//copy the file
 		//trim to the start of the backup dir, then remove one more step for timestamp
-		fs::copy(&file, path_to_world.join(trim_path(&file, path_to_backup_dir).components().skip(1).collect::<PathBuf>())).expect("Should be able to copy file");
+		fs::copy(&path_to_backup_dir.join(&file), path_to_world.join(&file.components().skip(1).collect::<PathBuf>())).expect("Should be able to copy file");
 	}
 }
 
@@ -253,7 +254,6 @@ fn read_manifest(path_to_manifest: &PathBuf) -> Vec<PathBuf> {
 }
 
 fn trim_path(path: &PathBuf, level: &PathBuf) -> PathBuf { //to be faster on batch operations, level should be cannonicalized before passing. Path should be a child of level.
-	dbg!(&path);
 	path.canonicalize()
 		.expect("Should be able to cannonicalize path")
 		.strip_prefix(level)
