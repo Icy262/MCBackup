@@ -85,12 +85,10 @@ fn full_backup(
 
 	let world_path_cannonicalized = path_to_world.canonicalize().expect("Should be able to cannonicalize path to world");
 
-	let path_to_backup_dir = path_to_backups_dir.join(current_time);
+	let path_to_backup_dir = path_to_backups_dir.join(current_time); //path to the directory we are actually backing up to
 
 	//create directory to store new backup
 	backup::init(&path_to_backup_dir, &files.iter().map(|file| trim_path(&file, &world_path_cannonicalized)).collect::<Vec<PathBuf>>());
-
-	let path_to_backup_dir = path_to_backups_dir.join(current_time); //path to the directory we are actually backing up to
 
 	for file in files { //for each file to backup,
 		fs::copy(&file, &path_to_backup_dir.join(trim_path(&file, &world_path_cannonicalized))).expect("Should be able to copy file");
@@ -113,8 +111,10 @@ fn iterative_backup(
 
 	let files = get_files_recursive(&path_to_world); //get the paths of every file to backup
 
+	let path_to_world_cannonicalized = path_to_world.canonicalize().expect("Should be able to cannonicalize path to world");
+
 	//create directory to store new backup. MUST go after finding the most recent backup because if not the most recent check will fail
-	backup::init(&path_to_backup, &files.iter().map(|file| trim_path(&file, &path_to_world.canonicalize().expect("Should be able to cannonicalize the world path"))).collect::<Vec<PathBuf>>());
+	backup::init(&path_to_backup, &files.iter().map(|file| trim_path(&file, &path_to_world_cannonicalized)).collect::<Vec<PathBuf>>());
 
 	//create writer to new manifest csv
 	let mut csv_writer = BufWriter::new(
@@ -124,9 +124,6 @@ fn iterative_backup(
 			.open(path_to_backup.join("manifest.csv"))
 			.expect("Should be able to open the manifest"),
 	);
-
-
-	let path_to_world_cannonicalized = path_to_world.canonicalize().expect("Should be able to cannonicalize path to world");
 
 	for file in files { //for each file,
 		//get the timestamp of the file's last modification
