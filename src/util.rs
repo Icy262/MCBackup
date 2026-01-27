@@ -37,6 +37,13 @@ pub(crate) mod timestamp {
 			)
 	}
 
+	#[allow(non_snake_case)]
+	pub(crate) fn to_String(timestamp: &OffsetDateTime) -> String {
+		timestamp
+			.format(FORMAT)
+			.expect("Should be able to convert timestamp to String")
+	}
+
 	pub(crate) fn get_timestamp(file: &PathBuf) -> OffsetDateTime {
 		OffsetDateTime::from(
 			fs::metadata(&file)
@@ -58,6 +65,7 @@ pub(crate) mod dir_operation {
 	use std::fs;
 	use std::path::PathBuf;
 
+	#[allow(dead_code)]
 	pub(crate) fn copy(path_to_src_dir: &PathBuf, path_to_dest_dir: &PathBuf) -> () {
 		//get the paths to every file in this dir
 		let files = get_files(&path_to_src_dir);
@@ -101,7 +109,6 @@ pub(crate) mod dir_operation {
 
 pub(crate) mod backup {
 	use crate::util::dir_operation;
-	use crate::util;
 	use std::fs::{self, create_dir_all};
 	use std::path::PathBuf;
 
