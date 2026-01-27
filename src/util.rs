@@ -1,3 +1,21 @@
+use std::path::PathBuf;
+
+pub(crate) fn get_file_name_as_str(path_to_file: &PathBuf) -> &str {
+	path_to_file
+		.file_name()
+		.expect("Should be able to get the file name of the file referenced in the path")
+		.to_str()
+		.expect("Should be able to convert OsString to String")
+}
+
+pub(crate) fn trim_path(path: &PathBuf, level: &PathBuf) -> PathBuf { //to be faster on batch operations, level should be cannonicalized before passing. Path should be a child of level.
+	path.canonicalize()
+		.expect("Should be able to cannonicalize path")
+		.strip_prefix(level)
+		.expect("Path should be below level")
+		.to_path_buf()
+}
+
 pub(crate) mod timestamp {
 	use time::OffsetDateTime;
 	use time::PrimitiveDateTime;
@@ -125,5 +143,14 @@ pub(crate) mod backup {
 			.expect("backup dir could not be read")
 			.next()
 			.is_some()
+	}
+
+	pub(crate) fn read_manifest(path_to_manifest: &PathBuf) -> Vec<PathBuf> {
+		fs::read_to_string(path_to_manifest.join("manifest.csv"))
+			.expect("most recent backup manifest read failed")
+			.split(",")
+			.map(|str| PathBuf::from(str))
+			.filter(|item| item != "") //remove empty items
+			.collect::<Vec<PathBuf>>()
 	}
 }
