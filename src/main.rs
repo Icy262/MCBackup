@@ -54,7 +54,7 @@ fn main() {
 		Mode::Backup { backup_mode } => {
 			//check if the backup is already up to date
 			if util::backup::get_most_recent(&path_to_backup_dir).is_some_and(|most_recent_backup| {
-				get_file_name_as_str(&most_recent_backup) == current_time
+				util::get_file_name_as_str(&most_recent_backup) == current_time
 			}) {
 				//if there is a most recent backup and it is the current time,
 				println!("Backup already up to date"); //notify user
@@ -88,10 +88,10 @@ fn full_backup(
 	let path_to_backup_dir = path_to_backups_dir.join(current_time); //path to the directory we are actually backing up to
 
 	//create directory to store new backup
-	util::backup::init(&path_to_backup_dir, &files.iter().map(|file| trim_path(&file, &world_path_cannonicalized)).collect::<Vec<PathBuf>>());
+	util::backup::init(&path_to_backup_dir, &files.iter().map(|file| util::trim_path(&file, &world_path_cannonicalized)).collect::<Vec<PathBuf>>());
 
 	for file in files { //for each file to backup,
-		fs::copy(&file, &path_to_backup_dir.join(trim_path(&file, &world_path_cannonicalized))).expect("Should be able to copy file");
+		fs::copy(&file, &path_to_backup_dir.join(util::trim_path(&file, &world_path_cannonicalized))).expect("Should be able to copy file");
 	}
 }
 
@@ -107,14 +107,14 @@ fn iterative_backup(
 
 	//get the timestamp of the backup
 	let most_recent_backup_timestamp =
-		util::timestamp::to_OffsetDateTime(get_file_name_as_str(&path_to_most_recent_backup));
+		util::timestamp::to_OffsetDateTime(util::get_file_name_as_str(&path_to_most_recent_backup));
 
 	let files = get_files_recursive(&path_to_world); //get the paths of every file to backup
 
 	let path_to_world_cannonicalized = path_to_world.canonicalize().expect("Should be able to cannonicalize path to world");
 
 	//create directory to store new backup. MUST go after finding the most recent backup because if not the most recent check will fail
-	util::backup::init(&path_to_backup, &files.iter().map(|file| trim_path(&file, &path_to_world_cannonicalized)).collect::<Vec<PathBuf>>());
+	util::backup::init(&path_to_backup, &files.iter().map(|file| util::trim_path(&file, &path_to_world_cannonicalized)).collect::<Vec<PathBuf>>());
 
 	//create writer to new manifest csv
 	let mut csv_writer = BufWriter::new(
@@ -129,7 +129,7 @@ fn iterative_backup(
 		//get the timestamp of the file's last modification
 		let modified_timestamp = util::timestamp::get_timestamp(&file);
 
-		let trimmed_file_path = trim_path(&file, &path_to_world_cannonicalized);
+		let trimmed_file_path = util::trim_path(&file, &path_to_world_cannonicalized);
 
 		//compare last modification timestamp to last backup timestamp to determine if a new copy needs to be taken
 		match modified_timestamp >= most_recent_backup_timestamp {
@@ -152,7 +152,7 @@ fn iterative_backup(
 						.write_all(
 							format!(
 								"{},",
-								PathBuf::from(get_file_name_as_str(&path_to_most_recent_backup))
+								PathBuf::from(util::get_file_name_as_str(&path_to_most_recent_backup))
 									.join(&trimmed_file_path)
 									.to_str()
 									.expect("Should be able to convert path to str")
@@ -162,10 +162,10 @@ fn iterative_backup(
 						.expect("Should be able to write to manifest");
 				} else if let Some(path) =
 					//check previous backup manifest for the file
-					read_manifest(&path_to_most_recent_backup)
+					util::backup::read_manifest(&path_to_most_recent_backup)
 					.into_iter()
 					.find(|item| {
-						get_file_name_as_str(item) == get_file_name_as_str(&trimmed_file_path) //TODO: Could cause issues if two files have same name. Resolve later
+						util::get_file_name_as_str(item) == util::get_file_name_as_str(&trimmed_file_path) //TODO: Could cause issues if two files have same name. Resolve later
 					}) {
 					//found the path in the old manifest
 					//write the path we found to the new manifest
@@ -211,16 +211,16 @@ fn restore(
 	let files = get_files_recursive(&path_to_backup);
 	
 	//init the world directory structure
-	let files_trimmed = files.clone().iter().map(|file| trim_path(file, &path_to_backup_dir_canonicalized).components().skip(1).collect::<PathBuf>()).collect::<Vec<PathBuf>>();
+	let files_trimmed = files.clone().iter().map(|file| util::trim_path(file, &path_to_backup_dir_canonicalized).components().skip(1).collect::<PathBuf>()).collect::<Vec<PathBuf>>();
 	util::backup::init(&path_to_world, &files_trimmed);
 
 	for file in files { //for each file,
 		//copy the file
-		fs::copy(&file, path_to_world.join(trim_path(&file, &path_to_backup_canonicalized))).expect("Should be able to copy file");
+		fs::copy(&file, path_to_world.join(util::trim_path(&file, &path_to_backup_canonicalized))).expect("Should be able to copy file");
 	}
 
 	//resolve the files in the manifest
-	let files = read_manifest(&path_to_backup);
+	let files = util::backup::read_manifest(&path_to_backup);
 	
 	//init the world directory structure for the manifest files
 	let files_trimmed = files.iter().map(|file| file.components().skip(1).collect::<PathBuf>()).collect::<Vec<PathBuf>>();
@@ -231,29 +231,4 @@ fn restore(
 		//trim to the start of the backup dir, then remove one more step for timestamp
 		fs::copy(&path_to_backup_dir.join(&file), path_to_world.join(&file.components().skip(1).collect::<PathBuf>())).expect("Should be able to copy file");
 	}
-}
-
-fn get_file_name_as_str(path_to_file: &PathBuf) -> &str {
-	path_to_file
-		.file_name()
-		.expect("Should be able to get the file name of the file referenced in the path")
-		.to_str()
-		.expect("Should be able to convert OsString to String")
-}
-
-fn read_manifest(path_to_manifest: &PathBuf) -> Vec<PathBuf> {
-	fs::read_to_string(path_to_manifest.join("manifest.csv"))
-		.expect("most recent backup manifest read failed")
-		.split(",")
-		.map(|str| PathBuf::from(str))
-		.filter(|item| item != "") //remove empty items
-		.collect::<Vec<PathBuf>>()
-}
-
-fn trim_path(path: &PathBuf, level: &PathBuf) -> PathBuf { //to be faster on batch operations, level should be cannonicalized before passing. Path should be a child of level.
-	path.canonicalize()
-		.expect("Should be able to cannonicalize path")
-		.strip_prefix(level)
-		.expect("Path should be below level")
-		.to_path_buf()
 }
