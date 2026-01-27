@@ -52,15 +52,13 @@ pub(crate) fn iterative_backup(
 	let most_recent_backup_timestamp =
 		util::timestamp::to_OffsetDateTime(util::get_file_name_as_str(&path_to_most_recent_backup));
 
+	let most_recent_backup_timestamp_as_string = util::timestamp::to_String(&most_recent_backup_timestamp);
+
 	let files = util::dir_operation::get_files_recursive(&path_to_world); //get the paths of every file to backup
 
 	let path_to_world_cannonicalized = path_to_world
 		.canonicalize()
 		.expect("Should be able to cannonicalize path to world");
-
-	let path_to_backups_dir_cannonicalized = path_to_backups_dir
-		.canonicalize()
-		.expect("Should be able to cannonicalize path to backups directory");
 
 	let prev_manifest = util::backup::read_manifest(&path_to_most_recent_backup);
 
@@ -104,13 +102,9 @@ pub(crate) fn iterative_backup(
 					csv_writer
 						.write_all(
 							format!(
-								"{},",
-								PathBuf::from(util::get_file_name_as_str(
-									&path_to_most_recent_backup
-								))
-								.join(&trimmed_file_path)
-								.to_str()
-								.expect("Should be able to convert path to str")
+								"{}/{},",
+								most_recent_backup_timestamp_as_string,
+								trimmed_file_path.to_str().expect("Should be able to convert path to str"),
 							)
 							.as_bytes(),
 						)
