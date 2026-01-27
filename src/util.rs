@@ -8,7 +8,8 @@ pub(crate) fn get_file_name_as_str(path_to_file: &PathBuf) -> &str {
 		.expect("Should be able to convert OsString to String")
 }
 
-pub(crate) fn trim_path(path: &PathBuf, level: &PathBuf) -> PathBuf { //to be faster on batch operations, level should be cannonicalized before passing. Path should be a child of level.
+pub(crate) fn trim_path(path: &PathBuf, level: &PathBuf) -> PathBuf {
+	//to be faster on batch operations, level should be cannonicalized before passing. Path should be a child of level.
 	path.canonicalize()
 		.expect("Should be able to cannonicalize path")
 		.strip_prefix(level)
@@ -17,21 +18,23 @@ pub(crate) fn trim_path(path: &PathBuf, level: &PathBuf) -> PathBuf { //to be fa
 }
 
 pub(crate) mod timestamp {
+	use std::fs;
+	use std::path::PathBuf;
 	use time::OffsetDateTime;
 	use time::PrimitiveDateTime;
 	use time::UtcOffset;
 	use time::macros::format_description;
-	use std::path::PathBuf;
-	use std::fs;
 
 	const FORMAT: &[time::format_description::FormatItem<'static>] =
-	format_description!("[year]-[month]-[day]T[hour]-[minute]");
+		format_description!("[year]-[month]-[day]T[hour]-[minute]");
 
 	#[allow(non_snake_case)]
 	pub(crate) fn to_OffsetDateTime(timestamp: &str) -> OffsetDateTime {
 		PrimitiveDateTime::parse(timestamp, &FORMAT)
 			.expect("Should be able to parse timestamp")
-			.assume_offset(UtcOffset::current_local_offset().expect("Should be able to get time zone"))
+			.assume_offset(
+				UtcOffset::current_local_offset().expect("Should be able to get time zone"),
+			)
 	}
 
 	pub(crate) fn get_timestamp(file: &PathBuf) -> OffsetDateTime {
@@ -52,8 +55,8 @@ pub(crate) mod timestamp {
 }
 
 pub(crate) mod dir_operation {
-	use std::path::PathBuf;
 	use std::fs;
+	use std::path::PathBuf;
 
 	pub(crate) fn copy(path_to_src_dir: &PathBuf, path_to_dest_dir: &PathBuf) -> () {
 		//get the paths to every file in this dir
@@ -79,24 +82,27 @@ pub(crate) mod dir_operation {
 	}
 
 	pub(crate) fn get_files_recursive(path_to_directory: &PathBuf) -> Vec<PathBuf> {
-		if path_to_directory.is_dir() { //if path is to dir,
+		if path_to_directory.is_dir() {
+			//if path is to dir,
 			let mut files = vec![];
 
-			for file in get_files(&path_to_directory) { //for each file,
+			for file in get_files(&path_to_directory) {
+				//for each file,
 				files.append(&mut get_files_recursive(&file)); //get the files it contains and append
 			}
 
 			return files;
-		} else { //path is to file,
+		} else {
+			//path is to file,
 			return vec![path_to_directory.to_path_buf()];
 		}
 	}
 }
 
 pub(crate) mod backup {
-	use std::path::PathBuf;
-	use std::fs::{self, create_dir_all};
 	use crate::util::dir_operation;
+	use std::fs::{self, create_dir_all};
+	use std::path::PathBuf;
 
 	pub(crate) fn path_generator(path_to_backup_dir: &PathBuf, timestamp: &String) -> PathBuf {
 		if timestamp == "recent" {
@@ -129,13 +135,19 @@ pub(crate) mod backup {
 		}
 	}
 
-	pub(crate) fn init(path_to_backup: &PathBuf, files: &Vec<PathBuf>) -> () { //file paths should be trimmed to world directory level
-		for file in files { //create a directory for the file
-			create_dir_all(path_to_backup.join(file.parent().expect("File position should have a parent"))).expect("Should be able to create dir");
+	pub(crate) fn init(path_to_backup: &PathBuf, files: &Vec<PathBuf>) -> () {
+		//file paths should be trimmed to world directory level
+		for file in files {
+			//create a directory for the file
+			create_dir_all(
+				path_to_backup.join(file.parent().expect("File position should have a parent")),
+			)
+			.expect("Should be able to create dir");
 		}
 
 		//create a manifest
-		fs::File::create(&path_to_backup.join("manifest.csv")).expect("Should be able to create the manifest");
+		fs::File::create(&path_to_backup.join("manifest.csv"))
+			.expect("Should be able to create the manifest");
 	}
 
 	pub(crate) fn prev_exists(path_to_backup_dir: &PathBuf) -> bool {
