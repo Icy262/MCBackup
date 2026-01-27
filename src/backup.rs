@@ -58,6 +58,11 @@ pub(crate) fn iterative_backup(
 		.canonicalize()
 		.expect("Should be able to cannonicalize path to world");
 
+	let path_to_backups_dir_cannonicalized = path_to_backups_dir
+		.canonicalize()
+		.expect("Should be able to cannonicalize path to backups directory");
+
+
 	//create directory to store new backup. MUST go after finding the most recent backup because if not the most recent check will fail
 	util::backup::init(
 		&path_to_backup,
@@ -114,9 +119,9 @@ pub(crate) fn iterative_backup(
 					util::backup::read_manifest(&path_to_most_recent_backup)
 							.into_iter()
 							.find(|item| {
-								util::get_file_name_as_str(item)
-									== util::get_file_name_as_str(&trimmed_file_path) //TODO: Could cause issues if two files have same name. Resolve later
-							}) {
+								util::trim_path(&path_to_backups_dir.join(item), &path_to_backups_dir_cannonicalized).components().skip(1).collect::<PathBuf>()
+									== trimmed_file_path
+								}) {
 					//found the path in the old manifest
 					//write the path we found to the new manifest
 					csv_writer
