@@ -5,8 +5,8 @@ use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use clap::ValueEnum;
-
-use crate::dir_operation::get_files_recursive;
+pub mod util;
+use crate::util::dir_operation::get_files_recursive;
 
 //Iterative backup tool for Minecraft
 #[derive(Parser)]
@@ -48,12 +48,12 @@ fn main() {
 	let path_to_backup_dir = PathBuf::from("testbackup");
 
 	//set directory timestamp
-	let current_time = timestamp::current_time();
+	let current_time = util::timestamp::current_time();
 
 	match args.mode {
 		Mode::Backup { backup_mode } => {
 			//check if the backup is already up to date
-			if backup::get_most_recent(&path_to_backup_dir).is_some_and(|most_recent_backup| {
+			if util::backup::get_most_recent(&path_to_backup_dir).is_some_and(|most_recent_backup| {
 				get_file_name_as_str(&most_recent_backup) == current_time
 			}) {
 				//if there is a most recent backup and it is the current time,
@@ -61,7 +61,7 @@ fn main() {
 				return; //return
 			}
 
-			if backup_mode == BackupMode::Iterative && backup::prev_exists(&path_to_backup_dir) {
+			if backup_mode == BackupMode::Iterative && util::backup::prev_exists(&path_to_backup_dir) {
 				//if there are previous backups and backup mode iterative specified,
 				iterative_backup(&path_to_world, &path_to_backup_dir, &current_time); //perform iterative backup
 			} else {
@@ -88,7 +88,7 @@ fn full_backup(
 	let path_to_backup_dir = path_to_backups_dir.join(current_time); //path to the directory we are actually backing up to
 
 	//create directory to store new backup
-	backup::init(&path_to_backup_dir, &files.iter().map(|file| trim_path(&file, &world_path_cannonicalized)).collect::<Vec<PathBuf>>());
+	util::backup::init(&path_to_backup_dir, &files.iter().map(|file| trim_path(&file, &world_path_cannonicalized)).collect::<Vec<PathBuf>>());
 
 	for file in files { //for each file to backup,
 		fs::copy(&file, &path_to_backup_dir.join(trim_path(&file, &world_path_cannonicalized))).expect("Should be able to copy file");
@@ -102,19 +102,19 @@ fn iterative_backup(
 ) -> () {
 	let path_to_backup = path_to_backups_dir.join(current_time);
 
-	let path_to_most_recent_backup = backup::get_most_recent(&path_to_backups_dir)
+	let path_to_most_recent_backup = util::backup::get_most_recent(&path_to_backups_dir)
 		.expect("Should be at least one backup in the backup dir");
 
 	//get the timestamp of the backup
 	let most_recent_backup_timestamp =
-		timestamp::to_OffsetDateTime(get_file_name_as_str(&path_to_most_recent_backup));
+		util::timestamp::to_OffsetDateTime(get_file_name_as_str(&path_to_most_recent_backup));
 
 	let files = get_files_recursive(&path_to_world); //get the paths of every file to backup
 
 	let path_to_world_cannonicalized = path_to_world.canonicalize().expect("Should be able to cannonicalize path to world");
 
 	//create directory to store new backup. MUST go after finding the most recent backup because if not the most recent check will fail
-	backup::init(&path_to_backup, &files.iter().map(|file| trim_path(&file, &path_to_world_cannonicalized)).collect::<Vec<PathBuf>>());
+	util::backup::init(&path_to_backup, &files.iter().map(|file| trim_path(&file, &path_to_world_cannonicalized)).collect::<Vec<PathBuf>>());
 
 	//create writer to new manifest csv
 	let mut csv_writer = BufWriter::new(
@@ -127,7 +127,7 @@ fn iterative_backup(
 
 	for file in files { //for each file,
 		//get the timestamp of the file's last modification
-		let modified_timestamp = timestamp::get_timestamp(&file);
+		let modified_timestamp = util::timestamp::get_timestamp(&file);
 
 		let trimmed_file_path = trim_path(&file, &path_to_world_cannonicalized);
 
@@ -202,7 +202,7 @@ fn restore(
 	fs::remove_dir_all(path_to_world).expect("Should be able to delete world directory");
 	fs::create_dir(path_to_world).expect("Should be able to create world directory");
 
-	let path_to_backup = backup::path_generator(path_to_backup_dir, timestamp);
+	let path_to_backup = util::backup::path_generator(path_to_backup_dir, timestamp);
 	let path_to_backup_canonicalized = path_to_backup.canonicalize().expect("Should be able canonicalize the path to backup");
 	
 	let path_to_backup_dir_canonicalized = path_to_backup_dir.canonicalize().expect("Should be able canonicalize the path to backup");
@@ -212,7 +212,7 @@ fn restore(
 	
 	//init the world directory structure
 	let files_trimmed = files.clone().iter().map(|file| trim_path(file, &path_to_backup_dir_canonicalized).components().skip(1).collect::<PathBuf>()).collect::<Vec<PathBuf>>();
-	backup::init(&path_to_world, &files_trimmed);
+	util::backup::init(&path_to_world, &files_trimmed);
 
 	for file in files { //for each file,
 		//copy the file
@@ -224,7 +224,7 @@ fn restore(
 	
 	//init the world directory structure for the manifest files
 	let files_trimmed = files.iter().map(|file| file.components().skip(1).collect::<PathBuf>()).collect::<Vec<PathBuf>>();
-	backup::init(&path_to_world, &files_trimmed);
+	util::backup::init(&path_to_world, &files_trimmed);
 
 	for file in files { //for each file,
 		//copy the file
@@ -256,134 +256,4 @@ fn trim_path(path: &PathBuf, level: &PathBuf) -> PathBuf { //to be faster on bat
 		.strip_prefix(level)
 		.expect("Path should be below level")
 		.to_path_buf()
-}
-
-mod timestamp {
-	use time::OffsetDateTime;
-	use time::PrimitiveDateTime;
-	use time::UtcOffset;
-	use time::macros::format_description;
-	use std::path::PathBuf;
-	use std::fs;
-
-	const FORMAT: &[time::format_description::FormatItem<'static>] =
-	format_description!("[year]-[month]-[day]T[hour]-[minute]");
-
-	#[allow(non_snake_case)]
-	pub(crate) fn to_OffsetDateTime(timestamp: &str) -> OffsetDateTime {
-		PrimitiveDateTime::parse(timestamp, &FORMAT)
-			.expect("Should be able to parse timestamp")
-			.assume_offset(UtcOffset::current_local_offset().expect("Should be able to get time zone"))
-	}
-
-	pub(crate) fn get_timestamp(file: &PathBuf) -> OffsetDateTime {
-		OffsetDateTime::from(
-			fs::metadata(&file)
-				.expect("failed to read metadata")
-				.modified()
-				.expect("failed to read timestamp"),
-		)
-	}
-
-	pub(crate) fn current_time() -> String {
-		OffsetDateTime::now_local()
-			.expect("could not get local time")
-			.format(&FORMAT)
-			.expect("could not convert time to String")
-	}
-}
-
-mod dir_operation {
-	use std::path::PathBuf;
-	use std::fs;
-
-	pub(crate) fn copy(path_to_src_dir: &PathBuf, path_to_dest_dir: &PathBuf) -> () {
-		//get the paths to every file in this dir
-		let files = get_files(&path_to_src_dir);
-
-		//for each file,
-		for file in files {
-			//copy the file from the source dir to the destination dir
-			fs::copy(
-				&file,
-				&path_to_dest_dir.join(file.file_name().expect("File name should be readable")),
-			)
-			.expect("Copy should be copyable");
-		}
-	}
-
-	pub(crate) fn get_files(path_to_directory: &PathBuf) -> Vec<PathBuf> {
-		//will get the files in the directory
-		fs::read_dir(&path_to_directory)
-			.expect("Directory must be readable")
-			.map(|file| file.expect("File must be readable").path())
-			.collect::<Vec<PathBuf>>()
-	}
-
-	pub(crate) fn get_files_recursive(path_to_directory: &PathBuf) -> Vec<PathBuf> {
-		if path_to_directory.is_dir() { //if path is to dir,
-			let mut files = vec![];
-
-			for file in get_files(&path_to_directory) { //for each file,
-				files.append(&mut get_files_recursive(&file)); //get the files it contains and append
-			}
-
-			return files;
-		} else { //path is to file,
-			return vec![path_to_directory.to_path_buf()];
-		}
-	}
-}
-
-mod backup {
-	use std::path::PathBuf;
-	use std::fs::{self, create_dir_all};
-	use crate::dir_operation;
-
-	pub(crate) fn path_generator(path_to_backup_dir: &PathBuf, timestamp: &String) -> PathBuf {
-		if timestamp == "recent" {
-			//if most recent backup,
-			//find most recent
-			get_most_recent(path_to_backup_dir)
-				.expect("Should be at least one backup in backup directory to call this function")
-		} else {
-			//find the backup specified,
-			//generate the path
-			path_to_backup_dir.join(timestamp)
-		}
-	}
-
-	pub(crate) fn get_most_recent(path_to_backup_dir: &PathBuf) -> Option<PathBuf> {
-		//get the paths to the backups in the backup directory
-		let mut path_to_backups = dir_operation::get_files(path_to_backup_dir);
-
-		//find most recent backup by sorting, reversing, and getting the first element
-		path_to_backups.sort();
-		path_to_backups.reverse();
-
-		//Return a path to the most recent backup exists, or none
-		if path_to_backups.len() != 0 {
-			//if there are backups in the backup dir,
-			return Some(path_to_backups[0].to_owned());
-		} else {
-			//no backups,
-			return None;
-		}
-	}
-
-	pub(crate) fn init(path_to_backup: &PathBuf, files: &Vec<PathBuf>) -> () { //file paths should be trimmed to world directory level
-		for file in files { //create a directory for the file
-			create_dir_all(path_to_backup.join(file.parent().expect("File position should have a parent"))).expect("Should be able to create dir");
-		}
-
-		//create a manifest
-		fs::File::create(&path_to_backup.join("manifest.csv")).expect("Should be able to create the manifest");
-	}
-
-	pub(crate) fn prev_exists(path_to_backup_dir: &PathBuf) -> bool {
-		fs::read_dir(path_to_backup_dir)
-			.expect("backup dir could not be read")
-			.next()
-			.is_some()
-	}
 }
