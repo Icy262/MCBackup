@@ -1,10 +1,10 @@
 use clap::Parser;
 use clap::Subcommand;
-use std::path::PathBuf;
 use clap::ValueEnum;
-pub mod util;
+use std::path::PathBuf;
 pub mod backup;
 pub mod restore;
+pub mod util;
 
 //Iterative backup tool for Minecraft
 #[derive(Parser)]
@@ -51,15 +51,19 @@ fn main() {
 	match args.mode {
 		Mode::Backup { backup_mode } => {
 			//check if the backup is already up to date
-			if util::backup::get_most_recent(&path_to_backup_dir).is_some_and(|most_recent_backup| {
-				util::get_file_name_as_str(&most_recent_backup) == current_time
-			}) {
+			if util::backup::get_most_recent(&path_to_backup_dir).is_some_and(
+				|most_recent_backup| {
+					util::get_file_name_as_str(&most_recent_backup) == current_time
+				},
+			) {
 				//if there is a most recent backup and it is the current time,
 				println!("Backup already up to date"); //notify user
 				return; //return
 			}
 
-			if backup_mode == BackupMode::Iterative && util::backup::prev_exists(&path_to_backup_dir) {
+			if backup_mode == BackupMode::Iterative
+				&& util::backup::prev_exists(&path_to_backup_dir)
+			{
 				//if there are previous backups and backup mode iterative specified,
 				backup::iterative_backup(&path_to_world, &path_to_backup_dir, &current_time); //perform iterative backup
 			} else {
@@ -68,7 +72,7 @@ fn main() {
 			}
 		}
 		Mode::Restore { restore_from } => {
-			restore::restore(&path_to_world, &path_to_backup_dir,&restore_from);
+			restore::restore(&path_to_world, &path_to_backup_dir, &restore_from);
 		}
 	}
 }
