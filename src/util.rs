@@ -111,6 +111,7 @@ pub(crate) mod backup {
 	use crate::util::dir_operation;
 	use std::fs::{self, create_dir_all};
 	use std::path::PathBuf;
+	use std::ffi::OsString;
 
 	pub(crate) fn path_generator(path_to_backup_dir: &PathBuf, timestamp: &String) -> PathBuf {
 		if timestamp == "recent" {
@@ -125,13 +126,45 @@ pub(crate) mod backup {
 		}
 	}
 
-	pub(crate) fn get_most_recent(path_to_backup_dir: &PathBuf) -> Option<PathBuf> {
+	pub(crate) fn get_next(path_to_backup_dir: &PathBuf, timestamp: &String) -> Option<PathBuf> {
+		let path_to_backups = get_all_backups_sorted(path_to_backup_dir);
+
+		let index = get_backup_index(&path_to_backups, &timestamp);
+
+		return path_to_backups.get(index + 1).cloned();
+	}
+
+	fn get_backup_index(path_to_backups: &Vec<PathBuf>, timestamp: &String) -> usize {
+		#[allow(non_snake_case)]
+		let timestamp_as_OsStr = OsString::from(&timestamp);
+
+		let index = path_to_backups.iter().position(|item| timestamp_as_OsStr == item.file_name().expect("Should be able to get timestamps of backups")).expect("Timestamp should be the timestamp of a backup");
+
+		return index;
+	}
+
+	pub(crate) fn get_prev(path_to_backup_dir: &PathBuf, timestamp: &String) -> Option<PathBuf> {
+		let path_to_backups = get_all_backups_sorted(path_to_backup_dir);
+
+		let index = get_backup_index(&path_to_backups, &timestamp);
+
+		return path_to_backups.get(index - 1).cloned();
+	}
+
+	pub(crate) fn get_all_backups_sorted(path_to_backup_dir: &PathBuf) -> Vec<PathBuf> {
 		//get the paths to the backups in the backup directory
 		let mut path_to_backups = dir_operation::get_files(path_to_backup_dir);
 
 		//find most recent backup by sorting, reversing, and getting the first element
 		path_to_backups.sort();
 		path_to_backups.reverse();
+
+		return path_to_backups;
+	}
+
+	pub(crate) fn get_most_recent(path_to_backup_dir: &PathBuf) -> Option<PathBuf> {
+		//get all the backups
+		let path_to_backups = get_all_backups_sorted(path_to_backup_dir);
 
 		//Return a path to the most recent backup exists, or none
 		if path_to_backups.len() != 0 {
