@@ -5,6 +5,7 @@ use std::path::PathBuf;
 pub mod backup;
 pub mod restore;
 pub mod util;
+pub mod remove;
 
 //Iterative backup tool for Minecraft
 #[derive(Parser)]
