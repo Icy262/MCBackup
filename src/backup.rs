@@ -62,6 +62,7 @@ pub(crate) fn iterative_backup(
 		.canonicalize()
 		.expect("Should be able to cannonicalize path to backups directory");
 
+	let prev_manifest = util::backup::read_manifest(&path_to_most_recent_backup);
 
 	//create directory to store new backup. MUST go after finding the most recent backup because if not the most recent check will fail
 	util::backup::init(
@@ -114,14 +115,7 @@ pub(crate) fn iterative_backup(
 							.as_bytes(),
 						)
 						.expect("Should be able to write to manifest");
-				} else if let Some(path) =
-					//check previous backup manifest for the file
-					util::backup::read_manifest(&path_to_most_recent_backup)
-							.into_iter()
-							.find(|item| {
-								util::trim_path(&path_to_backups_dir.join(item), &path_to_backups_dir_cannonicalized).components().skip(1).collect::<PathBuf>()
-									== trimmed_file_path
-								}) {
+				} else if let Some(path) = util::backup::file_in_manifest(&trimmed_file_path, &prev_manifest) { //check previous backup manifest for the file
 					//found the path in the old manifest
 					//write the path we found to the new manifest
 					csv_writer

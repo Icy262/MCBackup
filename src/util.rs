@@ -101,6 +101,7 @@ pub(crate) mod dir_operation {
 
 pub(crate) mod backup {
 	use crate::util::dir_operation;
+	use crate::util;
 	use std::fs::{self, create_dir_all};
 	use std::path::PathBuf;
 
@@ -164,5 +165,15 @@ pub(crate) mod backup {
 			.map(|str| PathBuf::from(str))
 			.filter(|item| item != "") //remove empty items
 			.collect::<Vec<PathBuf>>()
+	}
+
+	pub(crate) fn file_in_manifest(trimmed_file_path: &PathBuf, manifest: &Vec<PathBuf>) -> Option<PathBuf> {
+		manifest
+			.into_iter()
+			.find(|item| {
+				item.components().skip(1).collect::<PathBuf>()
+					== *trimmed_file_path
+				})
+			.cloned()
 	}
 }
