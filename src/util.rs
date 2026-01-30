@@ -108,6 +108,7 @@ pub(crate) mod dir_operation {
 }
 
 pub(crate) mod backup {
+	use rusqlite::Connection;
 	use crate::util::dir_operation;
 	use std::fs::{self, create_dir_all};
 	use std::path::PathBuf;
@@ -176,7 +177,7 @@ pub(crate) mod backup {
 		}
 	}
 
-	pub(crate) fn init(path_to_backup: &PathBuf, files: &Vec<PathBuf>) -> () {
+	pub(crate) fn init(path_to_backup: &PathBuf, files: &Vec<PathBuf>, current_time: &String, database_connection: &Connection) -> () {
 		//file paths should be trimmed to world directory level
 		for file in files {
 			//create a directory for the file
@@ -186,9 +187,15 @@ pub(crate) mod backup {
 			.expect("Should be able to create dir");
 		}
 
-		//create a manifest
-		fs::File::create(&path_to_backup.join("manifest.csv"))
-			.expect("Should be able to create the manifest");
+		//create a new table in the manifest
+		let create_table = format!(
+			"CREATE TABLE \"{}\" (
+				timestamp DATE,
+				path TEXT
+			);",
+			current_time
+			);
+		database_connection.execute(&create_table, ()).expect("Should be able to create new table");
 	}
 
 	pub(crate) fn prev_exists(path_to_backup_dir: &PathBuf) -> bool {
@@ -196,24 +203,5 @@ pub(crate) mod backup {
 			.expect("backup dir could not be read")
 			.next()
 			.is_some()
-	}
-
-	pub(crate) fn read_manifest(path_to_manifest: &PathBuf) -> Vec<PathBuf> {
-		fs::read_to_string(path_to_manifest.join("manifest.csv"))
-			.expect("most recent backup manifest read failed")
-			.split(",")
-			.map(|str| PathBuf::from(str))
-			.filter(|item| item != "") //remove empty items
-			.collect::<Vec<PathBuf>>()
-	}
-
-	pub(crate) fn file_in_manifest(trimmed_file_path: &PathBuf, manifest: &Vec<PathBuf>) -> Option<PathBuf> {
-		manifest
-			.into_iter()
-			.find(|item| {
-				item.components().skip(1).collect::<PathBuf>()
-					== *trimmed_file_path
-				})
-			.cloned()
 	}
 }
