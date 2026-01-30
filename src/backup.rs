@@ -1,14 +1,14 @@
 use crate::util;
 use std::fs;
-use std::fs::OpenOptions;
-use std::io::BufWriter;
-use std::io::Write;
 use std::path::PathBuf;
+use rusqlite::Connection;
+use rusqlite::params;
 
 pub(crate) fn full_backup(
 	path_to_world: &PathBuf,
 	path_to_backups_dir: &PathBuf,
 	current_time: &String,
+	database_connection: &Connection,
 ) -> () {
 	//get vec of paths to all files to backup
 	let files = util::dir_operation::get_files_recursive(path_to_world);
@@ -26,15 +26,28 @@ pub(crate) fn full_backup(
 			.iter()
 			.map(|file| util::trim_path(&file, &world_path_cannonicalized))
 			.collect::<Vec<PathBuf>>(),
+		current_time,
+		database_connection
 	);
 
+	let insert_file = format!("INSERT INTO \"{}\" (timestamp, path) VALUES (\"{}\", ?1);", current_time, current_time); 
+
+	//for each file to backup,
 	for file in files {
-		//for each file to backup,
+		//trim path to world level
+		let trimmed_file_path = util::trim_path(&file, &world_path_cannonicalized);
+
+		let file_destination = path_to_backup_dir.join(&trimmed_file_path);
+
+		//copy the file to the backup dir
 		fs::copy(
 			&file,
-			&path_to_backup_dir.join(util::trim_path(&file, &world_path_cannonicalized)),
+			&file_destination,
 		)
 		.expect("Should be able to copy file");
+
+		//write it to the manifest
+		database_connection.execute(&insert_file, params!(trimmed_file_path.to_string_lossy())).expect("Should be able to insert file into manifest");
 	}
 }
 
@@ -42,25 +55,28 @@ pub(crate) fn iterative_backup(
 	path_to_world: &PathBuf,
 	path_to_backups_dir: &PathBuf,
 	current_time: &String,
+	database_connection: &Connection,
 ) -> () {
 	let path_to_backup = path_to_backups_dir.join(current_time);
 
-	let path_to_most_recent_backup = util::backup::get_most_recent(&path_to_backups_dir)
-		.expect("Should be at least one backup in the backup dir");
+	//get the timestamp of the previous backup by getting the table
+	let previous_backup_timestamp: String = database_connection.query_row(
+		"SELECT name
+		FROM sqlite_schema
+		WHERE type = 'table'
+		ORDER BY name DESC
+		LIMIT 1;",
+		[],
+		|row| row.get("name"))
+		.expect("Should be able to get table with most recent timestamp");
 
-	//get the timestamp of the backup
-	let most_recent_backup_timestamp =
-		util::timestamp::to_OffsetDateTime(util::get_file_name_as_str(&path_to_most_recent_backup));
-
-	let most_recent_backup_timestamp_as_string = util::timestamp::to_String(&most_recent_backup_timestamp);
+	let previous_backup_time = util::timestamp::to_OffsetDateTime(&previous_backup_timestamp);
 
 	let files = util::dir_operation::get_files_recursive(&path_to_world); //get the paths of every file to backup
 
 	let path_to_world_cannonicalized = path_to_world
 		.canonicalize()
 		.expect("Should be able to cannonicalize path to world");
-
-	let prev_manifest = util::backup::read_manifest(&path_to_most_recent_backup);
 
 	//create directory to store new backup. MUST go after finding the most recent backup because if not the most recent check will fail
 	util::backup::init(
@@ -69,16 +85,12 @@ pub(crate) fn iterative_backup(
 			.iter()
 			.map(|file| util::trim_path(&file, &path_to_world_cannonicalized))
 			.collect::<Vec<PathBuf>>(),
+		current_time,
+		database_connection
 	);
 
-	//create writer to new manifest csv
-	let mut csv_writer = BufWriter::new(
-		OpenOptions::new()
-			.create(true)
-			.write(true)
-			.open(path_to_backup.join("manifest.csv"))
-			.expect("Should be able to open the manifest"),
-	);
+	let get_previous_path = format!("SELECT DISTINCT timestamp, path FROM \"{}\" WHERE path = ?1;", previous_backup_timestamp); //path should only appear once, but just in case use distinct
+	let insert_file = format!("INSERT INTO \"{}\" (timestamp, path) VALUES (?1, ?2);", current_time);
 
 	for file in files {
 		//for each file,
@@ -88,47 +100,20 @@ pub(crate) fn iterative_backup(
 		let trimmed_file_path = util::trim_path(&file, &path_to_world_cannonicalized);
 
 		//compare last modification timestamp to last backup timestamp to determine if a new copy needs to be taken
-		match modified_timestamp >= most_recent_backup_timestamp {
+		match modified_timestamp >= previous_backup_time {
 			true => {
 				//has been modified since last backup, needs to be updated
-				fs::copy(&file, path_to_backup.join(trimmed_file_path))
+				fs::copy(&file, path_to_backup.join(&trimmed_file_path))
 					.expect("Should be able to copy files from world");
+
+				//insert path
+				database_connection.execute(&insert_file, params!(current_time, trimmed_file_path.to_string_lossy())).expect("Should be able to insert file into manifest");
 			}
 			false => {
-				//hasn't been modified since last backup, insert path to older backup of the file in csv
-				//check previous backup directory for the file
-				if path_to_most_recent_backup.join(&trimmed_file_path).exists() {
-					//previous backup has the file, so put a reference to it
-					csv_writer
-						.write_all(
-							format!(
-								"{}/{},",
-								most_recent_backup_timestamp_as_string,
-								trimmed_file_path.to_str().expect("Should be able to convert path to str"),
-							)
-							.as_bytes(),
-						)
-						.expect("Should be able to write to manifest");
-				} else if let Some(path) = util::backup::file_in_manifest(&trimmed_file_path, &prev_manifest) { //check previous backup manifest for the file
-					//found the path in the old manifest
-					//write the path we found to the new manifest
-					csv_writer
-						.write_all(
-							format!(
-								"{},",
-								path.to_str().expect("Should be able convert path to str")
-							)
-							.as_bytes(),
-						)
-						.expect("could not write to manifest");
-				} else {
-					//something screwy is going on. copy the file and move on
-					println!("unexpected error, copied and continued");
-					fs::copy(file, path_to_backup.join(&trimmed_file_path))
-						.expect("copying file file failed");
-				}
+				//hasn't been modified since last backup, insert path to older backup of the file in manifest
+				let path: (String, String) = database_connection.query_row(&get_previous_path, params!(trimmed_file_path.to_string_lossy()), |row| Ok((row.get("timestamp")?, row.get("path")?))).expect("Should be able to read old path");
+				database_connection.execute(&insert_file, params!(path.0, path.1)).expect("Should be able to insert file into manifest");
 			}
 		}
 	}
-	csv_writer.flush().expect("failed to flush write buffer");
 }
