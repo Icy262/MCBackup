@@ -6,6 +6,7 @@ pub mod backup;
 pub mod restore;
 pub mod util;
 pub mod remove;
+use rusqlite::Connection;
 
 //Iterative backup tool for Minecraft
 #[derive(Parser)]
@@ -40,6 +41,9 @@ enum BackupMode {
 }
 
 fn main() {
+	//create DB connection
+	let database_connection = Connection::open("manifest.db").expect("Should be able to load or create sql database");
+
 	let args = Args::parse();
 
 	//temp, will be moved to config later
@@ -66,14 +70,14 @@ fn main() {
 				&& util::backup::prev_exists(&path_to_backup_dir)
 			{
 				//if there are previous backups and backup mode iterative specified,
-				backup::iterative_backup(&path_to_world, &path_to_backup_dir, &current_time); //perform iterative backup
+				backup::iterative_backup(&path_to_world, &path_to_backup_dir, &current_time, &database_connection); //perform iterative backup
 			} else {
 				//no previous backups or backup mode full specified,
-				backup::full_backup(&path_to_world, &path_to_backup_dir, &current_time); //perform a full backup
+				backup::full_backup(&path_to_world, &path_to_backup_dir, &current_time, &database_connection); //perform a full backup
 			}
 		}
 		Mode::Restore { restore_from } => {
-			restore::restore(&path_to_world, &path_to_backup_dir, &restore_from);
+			restore::restore(&path_to_world, &path_to_backup_dir, &restore_from, &database_connection);
 		}
 	}
 }
