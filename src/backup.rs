@@ -1,4 +1,5 @@
 use crate::util;
+use crate::util::backup::get_most_recent;
 use std::fs;
 use std::path::PathBuf;
 use rusqlite::Connection;
@@ -60,15 +61,7 @@ pub(crate) fn iterative_backup(
 	let path_to_backup = path_to_backups_dir.join(current_time);
 
 	//get the timestamp of the previous backup by getting the table
-	let previous_backup_timestamp: String = database_connection.query_row(
-		"SELECT name
-		FROM sqlite_schema
-		WHERE type = 'table'
-		ORDER BY name DESC
-		LIMIT 1;",
-		[],
-		|row| row.get("name"))
-		.expect("Should be able to get table with most recent timestamp");
+	let previous_backup_timestamp: String = get_most_recent(database_connection).expect("Should be a previous backup");
 
 	let previous_backup_time = util::timestamp::to_OffsetDateTime(&previous_backup_timestamp);
 
@@ -78,7 +71,7 @@ pub(crate) fn iterative_backup(
 		.canonicalize()
 		.expect("Should be able to cannonicalize path to world");
 
-	//create directory to store new backup. MUST go after finding the most recent backup because if not the most recent check will fail
+	//create directory to store new backup
 	util::backup::init(
 		&path_to_backup,
 		&files

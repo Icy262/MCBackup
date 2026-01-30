@@ -108,23 +108,36 @@ pub(crate) mod dir_operation {
 }
 
 pub(crate) mod backup {
-	use rusqlite::Connection;
+	use rusqlite::{Connection, OptionalExtension};
 	use crate::util::dir_operation;
 	use std::fs::{self, create_dir_all};
 	use std::path::PathBuf;
 	use std::ffi::OsString;
 
-	pub(crate) fn path_generator(path_to_backup_dir: &PathBuf, timestamp: &String) -> PathBuf {
+	pub(crate) fn path_generator(path_to_backup_dir: &PathBuf, timestamp: &String, database_connection: &Connection) -> String {
 		if timestamp == "recent" {
 			//if most recent backup,
 			//find most recent
-			get_most_recent(path_to_backup_dir)
-				.expect("Should be at least one backup in backup directory to call this function")
+			get_most_recent(database_connection).expect("Should be a previous backup")
 		} else {
 			//find the backup specified,
 			//generate the path
-			path_to_backup_dir.join(timestamp)
+			path_to_backup_dir.join(timestamp).to_string_lossy().to_string()
 		}
+	}
+
+	pub(crate) fn get_most_recent(database_connection: &Connection) -> Option<String> {
+		database_connection.query_row(
+			"SELECT name
+			FROM sqlite_schema
+			WHERE type = 'table'
+			ORDER BY name DESC
+			LIMIT 1;",
+			[],
+			|row| row.get::<_, String>("name")
+		)
+		.optional()
+		.expect("Should be able to get table with most recent timestamp")
 	}
 
 	pub(crate) fn get_next(path_to_backup_dir: &PathBuf, timestamp: &String) -> Option<PathBuf> {
@@ -163,19 +176,19 @@ pub(crate) mod backup {
 		return path_to_backups;
 	}
 
-	pub(crate) fn get_most_recent(path_to_backup_dir: &PathBuf) -> Option<PathBuf> {
-		//get all the backups
-		let path_to_backups = get_all_backups_sorted(path_to_backup_dir);
+	// pub(crate) fn get_most_recent(path_to_backup_dir: &PathBuf) -> Option<PathBuf> {
+	// 	//get all the backups
+	// 	let path_to_backups = get_all_backups_sorted(path_to_backup_dir);
 
-		//Return a path to the most recent backup exists, or none
-		if path_to_backups.len() != 0 {
-			//if there are backups in the backup dir,
-			return Some(path_to_backups[0].to_owned());
-		} else {
-			//no backups,
-			return None;
-		}
-	}
+	// 	//Return a path to the most recent backup exists, or none
+	// 	if path_to_backups.len() != 0 {
+	// 		//if there are backups in the backup dir,
+	// 		return Some(path_to_backups[0].to_owned());
+	// 	} else {
+	// 		//no backups,
+	// 		return None;
+	// 	}
+	// }
 
 	pub(crate) fn init(path_to_backup: &PathBuf, files: &Vec<PathBuf>, current_time: &String, database_connection: &Connection) -> () {
 		//file paths should be trimmed to world directory level
@@ -189,7 +202,7 @@ pub(crate) mod backup {
 
 		//create a new table in the manifest
 		let create_table = format!(
-			"CREATE TABLE \"{}\" (
+			"CREATE TABLE IF NOT EXISTS \"{}\" (
 				timestamp DATE,
 				path TEXT
 			);",
