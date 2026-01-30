@@ -56,9 +56,9 @@ fn main() {
 	match args.mode {
 		Mode::Backup { backup_mode } => {
 			//check if the backup is already up to date
-			if util::backup::get_most_recent(&path_to_backup_dir).is_some_and(
+			if util::backup::get_most_recent(&database_connection).is_some_and(
 				|most_recent_backup| {
-					util::get_file_name_as_str(&most_recent_backup) == current_time
+					most_recent_backup == current_time
 				},
 			) {
 				//if there is a most recent backup and it is the current time,
