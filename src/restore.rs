@@ -17,7 +17,6 @@ pub(crate) fn restore(
 
 	//get the paths of every file in the backup
 	let get_all_files  = format!("SELECT timestamp, path FROM \"{}\"", resolved_timestamp);
-	dbg!(&get_all_files);
 	let (timestamps, paths_trimmed) = database_connection
 		.prepare(&get_all_files)
 		.expect("Should be able to prepare SQL query")
