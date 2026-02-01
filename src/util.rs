@@ -50,29 +50,31 @@ pub(crate) mod dir_operation {
 	use std::fs;
 	use std::path::PathBuf;
 
-use crate::util::trim_path;
+	use crate::util::trim_path;
 
 	#[allow(dead_code)]
 	pub(crate) fn copy(path_to_src_dir: &PathBuf, path_to_dest_dir: &PathBuf) -> () {
-		let path_to_src_dir_cannonicalized = path_to_src_dir.canonicalize().expect("Should be able to cannonicalize path to src dir");
+		let path_to_src_dir_cannonicalized = path_to_src_dir
+			.canonicalize()
+			.expect("Should be able to cannonicalize path to src dir");
 
 		//get the paths to every file in this dir
-		let files = get_files_recursive(&path_to_src_dir).iter().filter_map(|path| {
-			if path.is_file() {
-				Some(trim_path(path, &path_to_src_dir_cannonicalized))
-			} else {
-				None
-			}
-		}).collect::<Vec<PathBuf>>();
+		let files = get_files_recursive(&path_to_src_dir)
+			.iter()
+			.filter_map(|path| {
+				if path.is_file() {
+					Some(trim_path(path, &path_to_src_dir_cannonicalized))
+				} else {
+					None
+				}
+			})
+			.collect::<Vec<PathBuf>>();
 
 		//for each file,
 		for file in files {
 			//copy the file from the source dir to the destination dir
-			fs::copy(
-				&path_to_src_dir.join(&file),
-				&path_to_dest_dir.join(&file),
-			)
-			.expect("Copy should be copyable");
+			fs::copy(&path_to_src_dir.join(&file), &path_to_dest_dir.join(&file))
+				.expect("Copy should be copyable");
 		}
 	}
 
@@ -107,7 +109,11 @@ pub(crate) mod backup {
 	use std::fs::{self, create_dir_all};
 	use std::path::PathBuf;
 
-	pub(crate) fn path_generator(path_to_backup_dir: &PathBuf, timestamp: &String, database_connection: &Connection) -> String {
+	pub(crate) fn path_generator(
+		path_to_backup_dir: &PathBuf,
+		timestamp: &String,
+		database_connection: &Connection,
+	) -> String {
 		if timestamp == "recent" {
 			//if most recent backup,
 			//find most recent
@@ -115,39 +121,49 @@ pub(crate) mod backup {
 		} else {
 			//find the backup specified,
 			//generate the path
-			path_to_backup_dir.join(timestamp).to_string_lossy().to_string()
+			path_to_backup_dir
+				.join(timestamp)
+				.to_string_lossy()
+				.to_string()
 		}
 	}
 
 	pub(crate) fn get_most_recent(database_connection: &Connection) -> Option<String> {
-		database_connection.query_row(
-			"SELECT name
+		database_connection
+			.query_row(
+				"SELECT name
 			FROM sqlite_schema
 			WHERE type = 'table'
 			ORDER BY name DESC
 			LIMIT 1;",
-			[],
-			|row| row.get::<_, String>("name")
-		)
-		.optional()
-		.expect("Should be able to get table with most recent timestamp")
+				[],
+				|row| row.get::<_, String>("name"),
+			)
+			.optional()
+			.expect("Should be able to get table with most recent timestamp")
 	}
 
 	pub(crate) fn get_next(database_connection: &Connection, timestamp: &String) -> Option<String> {
-		database_connection.query_row(
-			"SELECT name
+		database_connection
+			.query_row(
+				"SELECT name
 			FROM sqlite_schema
 			WHERE type = 'table' AND name > ?1
 			ORDER BY name ASC
 			LIMIT 1;",
-			[timestamp],
-			|row| row.get::<_, String>("name")
-		)
-		.optional()
-		.expect("Should be able to get table with most recent timestamp")
+				[timestamp],
+				|row| row.get::<_, String>("name"),
+			)
+			.optional()
+			.expect("Should be able to get table with most recent timestamp")
 	}
 
-	pub(crate) fn init(path_to_backup: &PathBuf, files: &Vec<PathBuf>, current_time: &String, database_connection: &Connection) -> () {
+	pub(crate) fn init(
+		path_to_backup: &PathBuf,
+		files: &Vec<PathBuf>,
+		current_time: &String,
+		database_connection: &Connection,
+	) -> () {
 		//file paths should be trimmed to world directory level
 		for file in files {
 			//create a directory for the file
@@ -164,8 +180,10 @@ pub(crate) mod backup {
 				path TEXT
 			);",
 			current_time
-			);
-		database_connection.execute(&create_table, ()).expect("Should be able to create new table");
+		);
+		database_connection
+			.execute(&create_table, ())
+			.expect("Should be able to create new table");
 	}
 
 	pub(crate) fn prev_exists(path_to_backup_dir: &PathBuf) -> bool {
