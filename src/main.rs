@@ -3,9 +3,9 @@ use clap::Subcommand;
 use clap::ValueEnum;
 use std::path::PathBuf;
 pub mod backup;
+pub mod remove;
 pub mod restore;
 pub mod util;
-pub mod remove;
 use rusqlite::Connection;
 
 //Iterative backup tool for Minecraft
@@ -48,7 +48,8 @@ enum BackupMode {
 
 fn main() {
 	//create DB connection
-	let database_connection = Connection::open("manifest.db").expect("Should be able to load or create sql database");
+	let database_connection =
+		Connection::open("manifest.db").expect("Should be able to load or create sql database");
 
 	let args = Args::parse();
 
@@ -62,11 +63,9 @@ fn main() {
 	match args.mode {
 		Mode::Backup { backup_mode } => {
 			//check if the backup is already up to date
-			if util::backup::get_most_recent(&database_connection).is_some_and(
-				|most_recent_backup| {
-					most_recent_backup == current_time
-				},
-			) {
+			if util::backup::get_most_recent(&database_connection)
+				.is_some_and(|most_recent_backup| most_recent_backup == current_time)
+			{
 				//if there is a most recent backup and it is the current time,
 				println!("Backup already up to date"); //notify user
 				return; //return
@@ -76,17 +75,38 @@ fn main() {
 				&& util::backup::prev_exists(&path_to_backups_dir)
 			{
 				//if there are previous backups and backup mode iterative specified,
-				backup::iterative_backup(&path_to_world, &path_to_backups_dir, &current_time, &database_connection); //perform iterative backup
+				backup::iterative_backup(
+					&path_to_world,
+					&path_to_backups_dir,
+					&current_time,
+					&database_connection,
+				); //perform iterative backup
 			} else {
 				//no previous backups or backup mode full specified,
-				backup::full_backup(&path_to_world, &path_to_backups_dir, &current_time, &database_connection); //perform a full backup
+				backup::full_backup(
+					&path_to_world,
+					&path_to_backups_dir,
+					&current_time,
+					&database_connection,
+				); //perform a full backup
 			}
 		}
 		Mode::Restore { restore_from } => {
-			restore::restore(&path_to_world, &path_to_backups_dir, &restore_from, &database_connection);
+			restore::restore(
+				&path_to_world,
+				&path_to_backups_dir,
+				&restore_from,
+				&database_connection,
+			);
 		}
-		Mode::Remove { timestamp_to_remove } => {
-			remove::remove(&path_to_backups_dir, &timestamp_to_remove, &database_connection);
+		Mode::Remove {
+			timestamp_to_remove,
+		} => {
+			remove::remove(
+				&path_to_backups_dir,
+				&timestamp_to_remove,
+				&database_connection,
+			);
 		}
 	}
 }
