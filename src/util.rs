@@ -112,7 +112,6 @@ pub(crate) mod backup {
 	use crate::util::dir_operation;
 	use std::fs::{self, create_dir_all};
 	use std::path::PathBuf;
-	use std::ffi::OsString;
 
 	pub(crate) fn path_generator(path_to_backup_dir: &PathBuf, timestamp: &String, database_connection: &Connection) -> String {
 		if timestamp == "recent" {
@@ -140,29 +139,32 @@ pub(crate) mod backup {
 		.expect("Should be able to get table with most recent timestamp")
 	}
 
-	pub(crate) fn get_next(path_to_backup_dir: &PathBuf, timestamp: &String) -> Option<PathBuf> {
-		let path_to_backups = get_all_backups_sorted(path_to_backup_dir);
-
-		let index = get_backup_index(&path_to_backups, &timestamp);
-
-		return path_to_backups.get(index + 1).cloned();
+	pub(crate) fn get_next(database_connection: &Connection, timestamp: &String) -> Option<String> {
+		database_connection.query_row(
+			"SELECT name
+			FROM sqlite_schema
+			WHERE type = 'table' AND name > ?1
+			ORDER BY name ASC
+			LIMIT 1;",
+			[timestamp],
+			|row| row.get::<_, String>("name")
+		)
+		.optional()
+		.expect("Should be able to get table with most recent timestamp")
 	}
 
-	fn get_backup_index(path_to_backups: &Vec<PathBuf>, timestamp: &String) -> usize {
-		#[allow(non_snake_case)]
-		let timestamp_as_OsStr = OsString::from(&timestamp);
-
-		let index = path_to_backups.iter().position(|item| timestamp_as_OsStr == item.file_name().expect("Should be able to get timestamps of backups")).expect("Timestamp should be the timestamp of a backup");
-
-		return index;
-	}
-
-	pub(crate) fn get_prev(path_to_backup_dir: &PathBuf, timestamp: &String) -> Option<PathBuf> {
-		let path_to_backups = get_all_backups_sorted(path_to_backup_dir);
-
-		let index = get_backup_index(&path_to_backups, &timestamp);
-
-		return path_to_backups.get(index - 1).cloned();
+	pub(crate) fn get_prev(database_connection: &Connection, timestamp: &String) -> Option<String> {
+		database_connection.query_row(
+			"SELECT name
+			FROM sqlite_schema
+			WHERE type = 'table' AND name > ?1
+			ORDER BY name DESC
+			LIMIT 1;",
+			[timestamp],
+			|row| row.get::<_, String>("name")
+		)
+		.optional()
+		.expect("Should be able to get table with most recent timestamp")
 	}
 
 	pub(crate) fn get_all_backups_sorted(path_to_backup_dir: &PathBuf) -> Vec<PathBuf> {
@@ -175,20 +177,6 @@ pub(crate) mod backup {
 
 		return path_to_backups;
 	}
-
-	// pub(crate) fn get_most_recent(path_to_backup_dir: &PathBuf) -> Option<PathBuf> {
-	// 	//get all the backups
-	// 	let path_to_backups = get_all_backups_sorted(path_to_backup_dir);
-
-	// 	//Return a path to the most recent backup exists, or none
-	// 	if path_to_backups.len() != 0 {
-	// 		//if there are backups in the backup dir,
-	// 		return Some(path_to_backups[0].to_owned());
-	// 	} else {
-	// 		//no backups,
-	// 		return None;
-	// 	}
-	// }
 
 	pub(crate) fn init(path_to_backup: &PathBuf, files: &Vec<PathBuf>, current_time: &String, database_connection: &Connection) -> () {
 		//file paths should be trimmed to world directory level
