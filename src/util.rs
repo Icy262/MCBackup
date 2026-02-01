@@ -65,17 +65,27 @@ pub(crate) mod dir_operation {
 	use std::fs;
 	use std::path::PathBuf;
 
+use crate::util::trim_path;
+
 	#[allow(dead_code)]
 	pub(crate) fn copy(path_to_src_dir: &PathBuf, path_to_dest_dir: &PathBuf) -> () {
+		let path_to_src_dir_cannonicalized = path_to_src_dir.canonicalize().expect("Should be able to cannonicalize path to src dir");
+
 		//get the paths to every file in this dir
-		let files = get_files(&path_to_src_dir);
+		let files = get_files_recursive(&path_to_src_dir).iter().filter_map(|path| {
+			if path.is_file() {
+				Some(trim_path(path, &path_to_src_dir_cannonicalized))
+			} else {
+				None
+			}
+		}).collect::<Vec<PathBuf>>();
 
 		//for each file,
 		for file in files {
 			//copy the file from the source dir to the destination dir
 			fs::copy(
-				&file,
-				&path_to_dest_dir.join(file.file_name().expect("File name should be readable")),
+				&path_to_src_dir.join(&file),
+				&path_to_dest_dir.join(&file),
 			)
 			.expect("Copy should be copyable");
 		}
