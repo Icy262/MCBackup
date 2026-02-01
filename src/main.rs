@@ -32,6 +32,12 @@ enum Mode {
 		#[arg(default_value = "recent")]
 		restore_from: String,
 	},
+
+	//remove a backup
+	Remove {
+		#[arg()]
+		timestamp_to_remove: String,
+	},
 }
 
 #[derive(Clone, ValueEnum, PartialEq, Eq)]
@@ -48,7 +54,7 @@ fn main() {
 
 	//temp, will be moved to config later
 	let path_to_world = PathBuf::from("testworld");
-	let path_to_backup_dir = PathBuf::from("testbackup");
+	let path_to_backups_dir = PathBuf::from("testbackup");
 
 	//set directory timestamp
 	let current_time = util::timestamp::current_time();
@@ -67,17 +73,20 @@ fn main() {
 			}
 
 			if backup_mode == BackupMode::Iterative
-				&& util::backup::prev_exists(&path_to_backup_dir)
+				&& util::backup::prev_exists(&path_to_backups_dir)
 			{
 				//if there are previous backups and backup mode iterative specified,
-				backup::iterative_backup(&path_to_world, &path_to_backup_dir, &current_time, &database_connection); //perform iterative backup
+				backup::iterative_backup(&path_to_world, &path_to_backups_dir, &current_time, &database_connection); //perform iterative backup
 			} else {
 				//no previous backups or backup mode full specified,
-				backup::full_backup(&path_to_world, &path_to_backup_dir, &current_time, &database_connection); //perform a full backup
+				backup::full_backup(&path_to_world, &path_to_backups_dir, &current_time, &database_connection); //perform a full backup
 			}
 		}
 		Mode::Restore { restore_from } => {
-			restore::restore(&path_to_world, &path_to_backup_dir, &restore_from, &database_connection);
+			restore::restore(&path_to_world, &path_to_backups_dir, &restore_from, &database_connection);
+		}
+		Mode::Remove { timestamp_to_remove } => {
+			remove::remove(&path_to_backups_dir, &timestamp_to_remove, &database_connection);
 		}
 	}
 }
