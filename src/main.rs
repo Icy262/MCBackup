@@ -5,7 +5,7 @@ pub mod remove;
 pub mod restore;
 pub mod util;
 use rusqlite::Connection;
-use crate::{backup::iterative_backup, util::dir_operation::get_files};
+use crate::backup::iterative_backup;
 use clap::Parser;
 use clap::ValueEnum;
 
@@ -110,7 +110,7 @@ fn main() {
 			}
 		}
 		Ok("Remove") => {
-			let remove_time = get_files(&path_to_backups_dir).iter().map(|path| path.to_string_lossy().into_owned()).collect::<Vec<String>>();
+			let remove_time = util::backup::get_all(&database_connection).expect("Should be backups to remove");
 			match Select::new("Select timestamp to remove:", remove_time).prompt() {
 				Ok(timestamp_to_remove) => {
 					remove::remove(
