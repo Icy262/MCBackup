@@ -24,9 +24,9 @@ pub(crate) fn remove(
 		.execute(
 			format!(
 				"UPDATE \"{}\"
-		SET timestamp = ?1
-		WHERE timestamp = ?2
-		",
+				SET timestamp = ?1
+				WHERE timestamp = ?2
+				",
 				next_backup_timestamp
 			)
 			.as_str(),

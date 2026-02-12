@@ -145,7 +145,7 @@ pub(crate) mod backup {
 				"SELECT name
 				FROM sqlite_schema
 				WHERE type = 'table'
-				ORDER BY name ASC"
+				ORDER BY name ASC",
 			)
 			.expect("Should be able to prepare sql query")
 			.query_map([], |row| row.get::<_, String>("name"))

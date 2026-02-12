@@ -1,20 +1,20 @@
-use std::path::PathBuf;
 use inquire::Select;
+use std::path::PathBuf;
 pub mod backup;
 pub mod remove;
 pub mod restore;
 pub mod util;
-use rusqlite::Connection;
 use crate::backup::iterative_backup;
 use clap::Parser;
 use clap::ValueEnum;
+use rusqlite::Connection;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Run in interactive or service mode
+	/// Run in interactive or service mode
 	#[arg(value_enum, default_value_t = RunMode::Interactive)]
-    run_mode: RunMode,
+	run_mode: RunMode,
 }
 
 #[derive(Clone, ValueEnum, PartialEq, Eq)]
@@ -41,7 +41,12 @@ fn main() {
 
 	//if running in service mode, just take iterative backup and exit
 	if run_mode.run_mode == RunMode::Service {
-		iterative_backup(&path_to_world, &path_to_backups_dir, &current_time, &database_connection);
+		iterative_backup(
+			&path_to_world,
+			&path_to_backups_dir,
+			&current_time,
+			&database_connection,
+		);
 		return;
 	}
 
@@ -50,7 +55,7 @@ fn main() {
 	let operation = vec!["Backup", "Restore", "Remove", "Exit"];
 
 	match Select::new("Select mode:", operation).prompt() {
-		Ok("Backup")  => {
+		Ok("Backup") => {
 			//check if the backup is already up to date
 			//TODO: update to use database
 			if util::backup::get_most_recent(&database_connection)
@@ -88,7 +93,7 @@ fn main() {
 						println!("Invalid backup type specified");
 					}
 				}
-			}	
+			}
 		}
 		Ok("Restore") => {
 			if let Some(restore_time) = util::backup::get_all(&database_connection) {
@@ -110,7 +115,8 @@ fn main() {
 			}
 		}
 		Ok("Remove") => {
-			let remove_time = util::backup::get_all(&database_connection).expect("Should be backups to remove");
+			let remove_time =
+				util::backup::get_all(&database_connection).expect("Should be backups to remove");
 			match Select::new("Select timestamp to remove:", remove_time).prompt() {
 				Ok(timestamp_to_remove) => {
 					remove::remove(
