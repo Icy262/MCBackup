@@ -109,25 +109,6 @@ pub(crate) mod backup {
 	use std::fs::{self, create_dir_all};
 	use std::path::PathBuf;
 
-	pub(crate) fn path_generator(
-		path_to_backup_dir: &PathBuf,
-		timestamp: &String,
-		database_connection: &Connection,
-	) -> String {
-		if timestamp == "recent" {
-			//if most recent backup,
-			//find most recent
-			get_most_recent(database_connection).expect("Should be a previous backup")
-		} else {
-			//find the backup specified,
-			//generate the path
-			path_to_backup_dir
-				.join(timestamp)
-				.to_string_lossy()
-				.to_string()
-		}
-	}
-
 	pub(crate) fn get_most_recent(database_connection: &Connection) -> Option<String> {
 		database_connection
 			.query_row(
@@ -156,6 +137,27 @@ pub(crate) mod backup {
 			)
 			.optional()
 			.expect("Should be able to get table with most recent timestamp")
+	}
+
+	pub(crate) fn get_all(database_connection: &Connection) -> Option<Vec<String>> {
+		let timestamps = database_connection
+			.prepare(
+				"SELECT name
+				FROM sqlite_schema
+				WHERE type = 'table'
+				ORDER BY name ASC"
+			)
+			.expect("Should be able to prepare sql query")
+			.query_map([], |row| row.get::<_, String>("name"))
+			.expect("Should be able to query database")
+			.collect::<rusqlite::Result<Vec<String>>>()
+			.expect("Should be able to collect result");
+
+		if timestamps.is_empty() {
+			None
+		} else {
+			Some(timestamps)
+		}
 	}
 
 	pub(crate) fn init(
