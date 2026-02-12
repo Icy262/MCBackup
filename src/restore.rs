@@ -13,11 +13,8 @@ pub(crate) fn restore(
 	fs::remove_dir_all(path_to_world).expect("Should be able to delete world directory");
 	fs::create_dir(path_to_world).expect("Should be able to create world directory");
 
-	let resolved_timestamp =
-		util::backup::path_generator(path_to_backups_dir, timestamp, database_connection);
-
 	//get the paths of every file in the backup
-	let get_all_files = format!("SELECT timestamp, path FROM \"{}\"", resolved_timestamp);
+	let get_all_files = format!("SELECT timestamp, path FROM \"{}\"", timestamp);
 	let (timestamps, paths_trimmed) = database_connection
 		.prepare(&get_all_files)
 		.expect("Should be able to prepare SQL query")
@@ -34,7 +31,7 @@ pub(crate) fn restore(
 	util::backup::init(
 		&path_to_world,
 		&paths_trimmed,
-		&resolved_timestamp,
+		timestamp,
 		database_connection,
 	);
 
