@@ -8,6 +8,8 @@ use clap::Parser;
 use clap::ValueEnum;
 use rusqlite::Connection;
 
+use crate::util::config;
+
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -31,17 +33,19 @@ fn main() {
 	let database_connection =
 		Connection::open("manifest.db").expect("Should be able to load or create sql database");
 
-	//temp, will be moved to config later
-	let path_to_world = PathBuf::from("testworld");
-	let backups_path = PathBuf::from("testbackup");
+	//ensure config exists
+	config::init_config_if_not_exists(&database_connection);
 
-	//set directory timestamp
+	//set current timestamp
 	let current_time = util::timestamp::current_time();
 
 	//if running in service mode, just take iterative backup and exit
 	if run_mode.run_mode == RunMode::Service {
+		let world_path = PathBuf::from(config::get_config(String::from("world_path"), &database_connection).expect("Set the world path in config mode"));
+		let backups_path = PathBuf::from(config::get_config(String::from("backups_path"), &database_connection).expect("Set the backup path in config mode"));
+
 		backup::iterative_backup(
-			&path_to_world,
+			&world_path,
 			&backups_path,
 			&current_time,
 			&database_connection,
@@ -63,13 +67,16 @@ fn main() {
 				//if there is a most recent backup and it is the current time,
 				println!("Backup already up to date"); //notify user
 			} else {
+				let world_path = PathBuf::from(config::get_config(String::from("world_path"), &database_connection).expect("Set the world path in config mode"));
+				let backups_path = PathBuf::from(config::get_config(String::from("backups_path"), &database_connection).expect("Set the backup path in config mode"));
+
 				let backup_type = vec!["Iterative", "Full"];
 				match Select::new("Select backup type:", backup_type).prompt() {
 					Ok("Iterative") => {
 						if util::backup::prev_exists(&backups_path) {
 							//if there are previous backups and backup mode iterative specified,
 							backup::iterative_backup(
-								&path_to_world,
+								&world_path,
 								&backups_path,
 								&current_time,
 								&database_connection,
@@ -79,7 +86,7 @@ fn main() {
 					Ok("Full") => {
 						//backup mode full specified,
 						backup::full_backup(
-							&path_to_world,
+							&world_path,
 							&backups_path,
 							&current_time,
 							&database_connection,
@@ -95,11 +102,14 @@ fn main() {
 			}
 		}
 		Ok("Restore") => {
+			let world_path = PathBuf::from(config::get_config(String::from("world_path"), &database_connection).expect("Set the world path in config mode"));
+			let backups_path = PathBuf::from(config::get_config(String::from("backups_path"), &database_connection).expect("Set the backup path in config mode"));
+
 			if let Some(restore_time) = util::backup::get_all(&database_connection) {
 				match Select::new("Select restore timestamp:", restore_time).prompt() {
 					Ok(restore_from) => {
 						restore::restore(
-							&path_to_world,
+							&world_path,
 							&backups_path,
 							&restore_from,
 							&database_connection,
@@ -114,6 +124,9 @@ fn main() {
 			}
 		}
 		Ok("Remove") => {
+			let world_path = PathBuf::from(config::get_config(String::from("world_path"), &database_connection).expect("Set the world path in config mode"));
+			let backups_path = PathBuf::from(config::get_config(String::from("backups_path"), &database_connection).expect("Set the backup path in config mode"));
+
 			let remove_time =
 				util::backup::get_all(&database_connection).expect("Should be backups to remove");
 			match Select::new("Select timestamp to remove:", remove_time).prompt() {
