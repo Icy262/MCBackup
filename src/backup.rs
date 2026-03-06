@@ -6,15 +6,15 @@ use std::fs;
 use std::path::PathBuf;
 
 pub(crate) fn full_backup(
-	path_to_world: &PathBuf,
+	world_path: &PathBuf,
 	backups_path: &PathBuf,
 	current_time: &String,
 	database_connection: &Connection,
 ) -> () {
 	//get vec of paths to all files to backup
-	let files = util::dir_operation::get_files_recursive(path_to_world);
+	let files = util::dir_operation::get_files_recursive(world_path);
 
-	let world_path_cannonicalized = path_to_world
+	let world_path_cannonicalized = world_path
 		.canonicalize()
 		.expect("Should be able to cannonicalize path to world");
 
@@ -54,7 +54,7 @@ pub(crate) fn full_backup(
 }
 
 pub(crate) fn iterative_backup(
-	path_to_world: &PathBuf,
+	world_path: &PathBuf,
 	backups_path: &PathBuf,
 	current_time: &String,
 	database_connection: &Connection,
@@ -67,9 +67,9 @@ pub(crate) fn iterative_backup(
 
 	let previous_backup_time = util::timestamp::to_OffsetDateTime(&previous_backup_timestamp);
 
-	let files = util::dir_operation::get_files_recursive(&path_to_world); //get the paths of every file to backup
+	let files = util::dir_operation::get_files_recursive(&world_path); //get the paths of every file to backup
 
-	let path_to_world_cannonicalized = path_to_world
+	let world_path_cannonicalized = world_path
 		.canonicalize()
 		.expect("Should be able to cannonicalize path to world");
 
@@ -78,7 +78,7 @@ pub(crate) fn iterative_backup(
 		&path_to_backup,
 		&files
 			.iter()
-			.map(|file| util::trim_path(&file, &path_to_world_cannonicalized))
+			.map(|file| util::trim_path(&file, &world_path_cannonicalized))
 			.collect::<Vec<PathBuf>>(),
 		current_time,
 		database_connection,
@@ -98,7 +98,7 @@ pub(crate) fn iterative_backup(
 		//get the timestamp of the file's last modification
 		let modified_timestamp = util::timestamp::get_timestamp(&file);
 
-		let trimmed_file_path = util::trim_path(&file, &path_to_world_cannonicalized);
+		let trimmed_file_path = util::trim_path(&file, &world_path_cannonicalized);
 
 		//compare last modification timestamp to last backup timestamp to determine if a new copy needs to be taken
 		match modified_timestamp >= previous_backup_time {
