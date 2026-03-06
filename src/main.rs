@@ -7,7 +7,7 @@ pub mod util;
 use clap::Parser;
 use clap::ValueEnum;
 use rusqlite::Connection;
-
+use std::io;
 use crate::util::config;
 
 #[derive(Parser)]
@@ -124,7 +124,6 @@ fn main() {
 			}
 		}
 		Ok("Remove") => {
-			let world_path = PathBuf::from(config::get_config(String::from("world_path"), &database_connection).expect("Set the world path in config mode"));
 			let backups_path = PathBuf::from(config::get_config(String::from("backups_path"), &database_connection).expect("Set the backup path in config mode"));
 
 			let remove_time =
@@ -143,7 +142,18 @@ fn main() {
 			}
 		}
 		Ok("Config") => {
-
+			let configs = vec!["world_path", "backups_path"];
+			match Select::new("Select config to update:", configs).prompt() {
+				Ok(key) => {
+					let mut value = String::new();
+					io::stdin().read_line(&mut value).expect("Should be able to get new config value from user");
+					value = String::from(value.trim_end());
+					config::set_config(String::from(key), value, &database_connection);
+				}
+				Err(_) => {
+					panic!();
+				}
+			}
 		}
 		Ok("Exit") => {
 			return;
