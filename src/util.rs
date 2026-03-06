@@ -114,7 +114,7 @@ pub(crate) mod backup {
 			.query_row(
 				"SELECT name
 			FROM sqlite_schema
-			WHERE type = 'table'
+			WHERE type = 'table' AND name != 'config'
 			ORDER BY name DESC
 			LIMIT 1;",
 				[],
@@ -144,7 +144,7 @@ pub(crate) mod backup {
 			.prepare(
 				"SELECT name
 				FROM sqlite_schema
-				WHERE type = 'table'
+				WHERE type = 'table' AND name != 'config'
 				ORDER BY name ASC",
 			)
 			.expect("Should be able to prepare sql query")
@@ -197,11 +197,10 @@ pub(crate) mod backup {
 }
 
 pub(crate) mod config {
-	use std::path::PathBuf;
 	use rusqlite::Connection;
 
 	pub(crate) fn init_config_if_not_exists(database_connection: &Connection) {
-		let create_table_if_not_exists = "CREATE TABLE IF NOT EXISTS config (key varchar, value varchar)";
+		let create_table_if_not_exists = "CREATE TABLE IF NOT EXISTS config (key varcha UNIQUE, value varchar)";
 		database_connection.execute(create_table_if_not_exists, ()).expect("Should be able to create config if it does not already exist");
 	}
 
