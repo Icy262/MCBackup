@@ -195,3 +195,23 @@ pub(crate) mod backup {
 			.is_some()
 	}
 }
+
+pub(crate) mod config {
+	use std::path::PathBuf;
+	use rusqlite::Connection;
+
+	pub(crate) fn init_config_if_not_exists(database_connection: &Connection) {
+		let create_table_if_not_exists = "CREATE TABLE IF NOT EXISTS config (key varchar, value varchar)";
+		database_connection.execute(create_table_if_not_exists, ()).expect("Should be able to create config if it does not already exist");
+	}
+
+	pub(crate) fn set_config(key: String, value: String, database_connection: &Connection) {
+		let set_key_to_value = format!("INSERT INTO config (key, value) VALUES (\"{}\", \"{}\") ON CONFLICT(key) DO UPDATE SET value = \"{}\"", key, value, value);
+		database_connection.execute(&set_key_to_value, ()).expect("Should be able to update config");
+	}
+
+	pub(crate) fn get_config(key: String, database_connection: &Connection) -> Result<String, rusqlite::Error> {
+		let get_value_of_key = format!("SELECT value FROM config WHERE key = \"{}\" LIMIT 1", key);
+		database_connection.prepare(&get_value_of_key).expect("Should be able to generate SQL query").query_row((), |row| row.get::<_, String>("value"))
+	}
+}
