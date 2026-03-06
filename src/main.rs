@@ -4,7 +4,6 @@ pub mod backup;
 pub mod remove;
 pub mod restore;
 pub mod util;
-use crate::backup::iterative_backup;
 use clap::Parser;
 use clap::ValueEnum;
 use rusqlite::Connection;
@@ -34,16 +33,16 @@ fn main() {
 
 	//temp, will be moved to config later
 	let path_to_world = PathBuf::from("testworld");
-	let path_to_backups_dir = PathBuf::from("testbackup");
+	let backups_path = PathBuf::from("testbackup");
 
 	//set directory timestamp
 	let current_time = util::timestamp::current_time();
 
 	//if running in service mode, just take iterative backup and exit
 	if run_mode.run_mode == RunMode::Service {
-		iterative_backup(
+		backup::iterative_backup(
 			&path_to_world,
-			&path_to_backups_dir,
+			&backups_path,
 			&current_time,
 			&database_connection,
 		);
@@ -52,7 +51,7 @@ fn main() {
 
 	//not running in service mode, enter interactive mode
 
-	let operation = vec!["Backup", "Restore", "Remove", "Exit"];
+	let operation = vec!["Backup", "Restore", "Remove", "Config", "Exit"];
 
 	match Select::new("Select mode:", operation).prompt() {
 		Ok("Backup") => {
@@ -67,11 +66,11 @@ fn main() {
 				let backup_type = vec!["Iterative", "Full"];
 				match Select::new("Select backup type:", backup_type).prompt() {
 					Ok("Iterative") => {
-						if util::backup::prev_exists(&path_to_backups_dir) {
+						if util::backup::prev_exists(&backups_path) {
 							//if there are previous backups and backup mode iterative specified,
 							backup::iterative_backup(
 								&path_to_world,
-								&path_to_backups_dir,
+								&backups_path,
 								&current_time,
 								&database_connection,
 							); //perform iterative backup
@@ -81,7 +80,7 @@ fn main() {
 						//backup mode full specified,
 						backup::full_backup(
 							&path_to_world,
-							&path_to_backups_dir,
+							&backups_path,
 							&current_time,
 							&database_connection,
 						); //perform a full backup
@@ -101,7 +100,7 @@ fn main() {
 					Ok(restore_from) => {
 						restore::restore(
 							&path_to_world,
-							&path_to_backups_dir,
+							&backups_path,
 							&restore_from,
 							&database_connection,
 						);
@@ -120,7 +119,7 @@ fn main() {
 			match Select::new("Select timestamp to remove:", remove_time).prompt() {
 				Ok(timestamp_to_remove) => {
 					remove::remove(
-						&path_to_backups_dir,
+						&backups_path,
 						&timestamp_to_remove,
 						&database_connection,
 					);
@@ -129,6 +128,9 @@ fn main() {
 					println!("Not the timestamp of a backup");
 				}
 			}
+		}
+		Ok("Config") => {
+
 		}
 		Ok("Exit") => {
 			return;

@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 pub(crate) fn full_backup(
 	path_to_world: &PathBuf,
-	path_to_backups_dir: &PathBuf,
+	backups_path: &PathBuf,
 	current_time: &String,
 	database_connection: &Connection,
 ) -> () {
@@ -18,7 +18,7 @@ pub(crate) fn full_backup(
 		.canonicalize()
 		.expect("Should be able to cannonicalize path to world");
 
-	let path_to_backup_dir = path_to_backups_dir.join(current_time); //path to the directory we are actually backing up to
+	let path_to_backup_dir = backups_path.join(current_time); //path to the directory we are actually backing up to
 
 	//create directory to store new backup
 	util::backup::init(
@@ -55,11 +55,11 @@ pub(crate) fn full_backup(
 
 pub(crate) fn iterative_backup(
 	path_to_world: &PathBuf,
-	path_to_backups_dir: &PathBuf,
+	backups_path: &PathBuf,
 	current_time: &String,
 	database_connection: &Connection,
 ) -> () {
-	let path_to_backup = path_to_backups_dir.join(current_time);
+	let path_to_backup = backups_path.join(current_time);
 
 	//get the timestamp of the previous backup by getting the table
 	let previous_backup_timestamp: String =

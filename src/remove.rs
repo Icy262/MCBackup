@@ -5,7 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 
 pub(crate) fn remove(
-	path_to_backups_dir: &PathBuf,
+	backups_path: &PathBuf,
 	timestamp: &String,
 	database_connection: &Connection,
 ) {
@@ -15,8 +15,8 @@ pub(crate) fn remove(
 
 	//copy any files from this backup to the next one
 	util::dir_operation::copy(
-		&path_to_backups_dir.join(&timestamp),
-		&path_to_backups_dir.join(&next_backup_timestamp),
+		&backups_path.join(&timestamp),
+		&backups_path.join(&next_backup_timestamp),
 	);
 
 	//update the next backup's manifest to update the timestamps of moved files
@@ -39,6 +39,6 @@ pub(crate) fn remove(
 		.expect("Should be able to drop deleted backup table");
 
 	//remove directory
-	fs::remove_dir_all(path_to_backups_dir.join(timestamp))
+	fs::remove_dir_all(backups_path.join(timestamp))
 		.expect("Should be able to delete old backup");
 }
