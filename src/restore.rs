@@ -4,14 +4,14 @@ use std::fs;
 use std::path::PathBuf;
 
 pub(crate) fn restore(
-	path_to_world: &PathBuf,
+	world_path: &PathBuf,
 	backups_path: &PathBuf,
 	timestamp: &String,
 	database_connection: &Connection,
 ) -> () {
 	//remove the world directory and recreate it to remove the contents
-	fs::remove_dir_all(path_to_world).expect("Should be able to delete world directory");
-	fs::create_dir(path_to_world).expect("Should be able to create world directory");
+	fs::remove_dir_all(world_path).expect("Should be able to delete world directory");
+	fs::create_dir(world_path).expect("Should be able to create world directory");
 
 	//get the paths of every file in the backup
 	let get_all_files = format!("SELECT timestamp, path FROM \"{}\"", timestamp);
@@ -29,7 +29,7 @@ pub(crate) fn restore(
 
 	//init the world directory structure
 	util::backup::init(
-		&path_to_world,
+		&world_path,
 		&paths_trimmed,
 		timestamp,
 		database_connection,
@@ -46,7 +46,7 @@ pub(crate) fn restore(
 						.expect("Should be able to get timestamp of file"),
 				)
 				.join(path),
-			path_to_world.join(path),
+			world_path.join(path),
 		)
 		.expect("Should be able to copy file");
 	}
