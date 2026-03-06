@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 pub(crate) fn restore(
 	path_to_world: &PathBuf,
-	path_to_backups_dir: &PathBuf,
+	backups_path: &PathBuf,
 	timestamp: &String,
 	database_connection: &Connection,
 ) -> () {
@@ -39,7 +39,7 @@ pub(crate) fn restore(
 		//for each file,
 		//copy the file
 		fs::copy(
-			path_to_backups_dir
+			backups_path
 				.join(
 					timestamps
 						.get(index)
